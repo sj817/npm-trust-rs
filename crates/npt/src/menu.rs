@@ -125,6 +125,15 @@ pub async fn run(cfg: &Config) -> Result<()> {
             Action::Batch => batch(&client, cfg).await?,
             Action::Scan => {
                 crate::commands::scan::run(scan_args(), cfg).await?;
+                if engine::confirm(
+                    t(
+                        "Select some of these to configure now?",
+                        "现在从当前目录勾选一些包来配置?",
+                    ),
+                    false,
+                )? {
+                    configure_from_dir(&client, cfg, ".").await?;
+                }
             }
             Action::Audit => {
                 let _ = crate::commands::audit::run(audit_args(), cfg).await?;
@@ -352,15 +361,21 @@ fn gen_ci(cfg: &Config) -> Result<()> {
     wizard::ensure_workflow_file(Path::new("."), &workflow)
 }
 
-/// Batch: scan a directory for packages, multi-select, then for each selected
-/// package first-publish a placeholder (if needed) and bind it — reusing one OTP
-/// across the whole batch (npm's ~5-minute 2FA window).
+/// Batch: prompt for a directory, then scan → select → configure.
 async fn batch(client: &Client, cfg: &Config) -> Result<()> {
     let dir = engine::prompt_line(
         t("Directory to scan for packages", "要扫描的目录"),
         Some("."),
     )?;
-    let found = crate::discover::discover_local(&[PathBuf::from(&dir)])?;
+    configure_from_dir(client, cfg, &dir).await
+}
+
+/// Scan a directory for packages, show each one's publish status, let the user
+/// multi-select, then for each selected package first-publish a placeholder (if
+/// needed) and bind it — reusing one OTP across the whole batch (npm's ~5-minute
+/// 2FA window).
+async fn configure_from_dir(client: &Client, cfg: &Config, dir: &str) -> Result<()> {
+    let found = crate::discover::discover_local(&[PathBuf::from(dir)])?;
     let candidates: Vec<_> = found
         .into_iter()
         .filter(|p| !p.private && !p.name.is_empty())
@@ -376,16 +391,42 @@ async fn batch(client: &Client, cfg: &Config) -> Result<()> {
         return Ok(());
     }
 
+    // Publish status per candidate (fast, unauthenticated — no OTP).
+    println!(
+        "{}",
+        color::dim(&m(
+            format!("Scanning {} package(s)…", candidates.len()),
+            format!("正在检查 {} 个包的状态…", candidates.len())
+        ))
+    );
+    let mut published = Vec::with_capacity(candidates.len());
+    for p in &candidates {
+        published.push(client.package_exists(&p.name).await.unwrap_or(false));
+    }
+
     let labels: Vec<String> = candidates
         .iter()
-        .map(|p| match &p.repository {
-            Some(r) => format!("{}  → {r}", p.name),
-            None => format!("{}  {}", p.name, t("(no repository — will skip)", "(无 repository,将跳过)")),
+        .enumerate()
+        .map(|(i, p)| {
+            let pub_s = if published[i] {
+                t("published", "已发布")
+            } else {
+                t("unpublished", "未发布")
+            };
+            match &p.repository {
+                Some(r) => format!("{}  → {r} · {pub_s}", p.name),
+                None => format!(
+                    "{}  · {pub_s} {}",
+                    p.name,
+                    t("(no repository — will skip)", "(无 repository,将跳过)")
+                ),
+            }
         })
         .collect();
+
     let picked = MultiSelect::with_theme(&ColorfulTheme::default())
         .with_prompt(t(
-            "Select packages (space toggles, enter confirms)",
+            "Select packages to configure (space toggles, enter confirms)",
             "勾选要配置的包(空格切换,回车确认)",
         ))
         .items(&labels)
@@ -394,9 +435,15 @@ async fn batch(client: &Client, cfg: &Config) -> Result<()> {
         .ok()
         .flatten();
     let Some(picked) = picked else { return Ok(()) };
-    let chosen: Vec<&crate::discover::DiscoveredPackage> =
-        picked.iter().map(|&i| &candidates[i]).collect();
-    let bindable = chosen.iter().filter(|p| p.repository.is_some()).count();
+    if picked.is_empty() {
+        println!("{}", color::dim(t("Nothing selected.", "未选择。")));
+        return Ok(());
+    }
+
+    let bindable = picked
+        .iter()
+        .filter(|&&i| candidates[i].repository.is_some())
+        .count();
     if bindable == 0 {
         println!(
             "{}",
@@ -426,7 +473,8 @@ async fn batch(client: &Client, cfg: &Config) -> Result<()> {
     let mut writer = Writer::with_otp(client, otp.clone());
     let (mut ok, mut fail) = (0u32, 0u32);
 
-    for p in &chosen {
+    for &i in &picked {
+        let p = &candidates[i];
         let name = &p.name;
         println!("\n{}", color::title(&format!("── {name} ──")));
         let Some(repo) = p.repository.clone() else {
@@ -438,40 +486,32 @@ async fn batch(client: &Client, cfg: &Config) -> Result<()> {
             continue;
         };
 
-        // First-publish a placeholder if the package doesn't exist. Retry on OTP
-        // expiry; blank OTP skips this package.
-        match client.package_exists(name).await {
-            Ok(false) => {
-                let mut published = false;
-                loop {
-                    match wizard::publish_placeholder(name, Some(&otp)) {
-                        Ok(()) => {
-                            published = true;
-                            break;
-                        }
-                        Err(e) => {
-                            eprintln!("{}", color::warn(&format!("  publish failed: {e}")));
-                            match engine::prompt_otp_optional(t(
-                                "  re-enter OTP to retry (blank to skip this package)",
-                                "  重输 OTP 重试(留空跳过该包)",
-                            ))? {
-                                Some(o) => {
-                                    otp = o;
-                                    writer.set_otp(otp.clone());
-                                }
-                                None => break,
+        // First-publish a placeholder if it doesn't exist yet. Retry on OTP expiry;
+        // a blank OTP skips this package.
+        if !published[i] {
+            let mut done = false;
+            loop {
+                match wizard::publish_placeholder(name, Some(&otp)) {
+                    Ok(()) => {
+                        done = true;
+                        break;
+                    }
+                    Err(e) => {
+                        eprintln!("{}", color::warn(&format!("  publish failed: {e}")));
+                        match engine::prompt_otp_optional(t(
+                            "  re-enter OTP to retry (blank to skip this package)",
+                            "  重输 OTP 重试(留空跳过该包)",
+                        ))? {
+                            Some(o) => {
+                                otp = o;
+                                writer.set_otp(otp.clone());
                             }
+                            None => break,
                         }
                     }
                 }
-                if !published {
-                    fail += 1;
-                    continue;
-                }
             }
-            Ok(true) => {}
-            Err(e) => {
-                eprintln!("{}", color::warn(&format!("  existence check failed: {e}")));
+            if !done {
                 fail += 1;
                 continue;
             }
