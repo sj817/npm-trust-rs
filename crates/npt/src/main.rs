@@ -6,6 +6,7 @@ mod config;
 mod discover;
 mod engine;
 mod github;
+mod i18n;
 mod pkgjson;
 mod templates;
 mod wizard;

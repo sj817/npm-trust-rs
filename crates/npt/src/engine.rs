@@ -71,10 +71,24 @@ pub async fn resolve_client(require: bool) -> Result<(Client, bool)> {
         Some(c) => {
             let mut valid = true;
             match client.whoami().await {
-                Ok(who) => eprintln!("→ authenticated as {} (via {})", who.username, c.source),
+                Ok(who) => eprintln!(
+                    "{}",
+                    if crate::i18n::is_zh() {
+                        format!("→ 已登录:{}(来自 {})", who.username, c.source)
+                    } else {
+                        format!("→ authenticated as {} (via {})", who.username, c.source)
+                    }
+                ),
                 Err(e) => {
                     valid = false;
-                    eprintln!("⚠ credentials from {} did not validate: {e}", c.source);
+                    eprintln!(
+                        "{}",
+                        if crate::i18n::is_zh() {
+                            format!("⚠ 凭据({})验证失败:{e}", c.source)
+                        } else {
+                            format!("⚠ credentials from {} did not validate: {e}", c.source)
+                        }
+                    );
                     if require {
                         return Err(anyhow::anyhow!("invalid credentials"));
                     }
@@ -89,7 +103,13 @@ pub async fn resolve_client(require: bool) -> Result<(Client, bool)> {
                      ~/.npmrc, set NPM_TOKEN, or run `npm login`."
                 );
             }
-            eprintln!("→ no credentials; running read-only (existence checks only)");
+            eprintln!(
+                "{}",
+                crate::i18n::t(
+                    "→ no credentials; running read-only (existence checks only)",
+                    "→ 未提供凭据;只读模式(仅做存在性检查)"
+                )
+            );
             Ok((client, false))
         }
     }
@@ -258,7 +278,13 @@ pub fn prompt_otp() -> Result<String> {
              available. Re-run in a terminal (2FA cannot be bypassed for trust writes)."
         );
     }
-    eprint!("This operation requires a one-time password.\nEnter OTP: ");
+    eprint!(
+        "{}",
+        crate::i18n::t(
+            "This operation requires a one-time password.\nEnter OTP: ",
+            "此操作需要一次性密码(2FA/OTP)。\n请输入 OTP: "
+        )
+    );
     io::stderr().flush().ok();
     let mut line = String::new();
     io::stdin()
