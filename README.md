@@ -118,6 +118,28 @@ scoped-name escaping, OTP `401 → replay`, rate-limit retry, error-code mapping
 cargo test
 ```
 
+## Publishing these npm packages (maintainers)
+
+The main package + 6 platform binary packages are published together. Because Trusted
+Publishing (OIDC) can't be configured for a package that doesn't exist yet, the **first**
+release is done locally with your 2FA — one OTP for the whole batch:
+
+```sh
+# 1. Build every platform (push a tag → the release workflow's build job), then pull the
+#    binaries locally:
+gh run download <run-id> -D artifacts        # artifacts/<rust-target>/npt[.exe]
+
+# 2. Assemble + publish all packages. You're prompted ONCE for your OTP; every
+#    `npm publish` reuses it within npm's ~5-minute 2FA window (auto re-prompts if it
+#    expires mid-run):
+node scripts/assemble-npm.mjs --artifacts artifacts --version <x.y.z> --publish
+```
+
+After that first publish, configure Trusted Publishing for each package (use `npt`!) and
+subsequent releases go tokenless via the OIDC `release.yml` workflow — no OTP, no token.
+
+In CI (non-interactive) the same script skips the OTP prompt and relies on OIDC.
+
 ## ⚠️ Risks & caveats
 
 - **This is a non-public, reverse-engineered API.** npm can change it without notice; the
