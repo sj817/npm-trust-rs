@@ -246,9 +246,10 @@ pub async fn run(args: WizardArgs, cfg: &Config) -> Result<()> {
         publish_placeholder(&name)?;
     }
 
-    // 8. Ensure the trusted-publisher binding.
-    let actual = client.list_trust(&name).await?.into_iter().next();
+    // 8. Ensure the trusted-publisher binding. Reads can require OTP too, so go
+    //    through the OTP-aware writer (which also caches the OTP for the window).
     let mut writer = Writer::new(&client);
+    let actual = writer.list(&name).await?.into_iter().next();
     match actual {
         Some(a) if desired.same_binding(&a) => {
             println!(

@@ -148,11 +148,13 @@ impl Client {
 
     /// `GET /-/package/<name>/trust` — list configs (`docs/api.md` §3.1).
     ///
-    /// Normalizes the object-or-array response into a `Vec`.
-    pub async fn list_trust(&self, package: &str) -> Result<Vec<TrustConfig>> {
+    /// Normalizes the object-or-array response into a `Vec`. npm wraps this read in
+    /// `otplease`, so it can return [`Error::OtpRequired`]; pass `otp` to replay,
+    /// reusing the account's ~5-minute 2FA window.
+    pub async fn list_trust(&self, package: &str, otp: Option<&str>) -> Result<Vec<TrustConfig>> {
         let path = format!("-/package/{}/trust", Self::escaped_name(package));
         let url = self.url(&path)?;
-        let resp = self.send(Method::GET, url, None, None).await?;
+        let resp = self.send(Method::GET, url, None, otp).await?;
         let value: Value = self.json(resp).await?;
         normalize_configs(value)
     }

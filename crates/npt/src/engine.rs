@@ -221,7 +221,7 @@ pub async fn assess(
         };
 
         let actual = if published && have_creds {
-            match client.list_trust(&pkg.name).await {
+            match client.list_trust(&pkg.name, None).await {
                 Ok(list) => list.into_iter().next(),
                 Err(Error::OtpRequired(_)) | Err(Error::Unauthorized(_)) => None,
                 Err(e) => {
@@ -257,6 +257,18 @@ pub struct Writer<'a> {
 impl<'a> Writer<'a> {
     pub fn new(client: &'a Client) -> Self {
         Writer { client, otp: None }
+    }
+
+    /// List configs, prompting for OTP on challenge (reads can require 2FA too).
+    pub async fn list(&mut self, package: &str) -> Result<Vec<TrustConfig>> {
+        loop {
+            let otp = self.otp.clone();
+            match self.client.list_trust(package, otp.as_deref()).await {
+                Ok(v) => return Ok(v),
+                Err(Error::OtpRequired(ch)) => self.handle_otp(ch)?,
+                Err(e) => return Err(e.into()),
+            }
+        }
     }
 
     pub async fn create(&mut self, package: &str, cfg: &TrustConfig) -> Result<()> {

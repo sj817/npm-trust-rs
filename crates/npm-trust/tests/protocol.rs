@@ -65,7 +65,7 @@ async fn list_trust_escapes_scoped_name_and_normalizes_single_object() {
         .mount(&server)
         .await;
 
-    let configs = client(&server).list_trust("@acme/widget").await.unwrap();
+    let configs = client(&server).list_trust("@acme/widget", None).await.unwrap();
     assert_eq!(configs.len(), 1);
     assert_eq!(configs[0].id.as_deref(), Some("cfg_1"));
     assert_eq!(configs[0].permissions, vec![Permission::Publish]);
@@ -193,7 +193,7 @@ async fn rate_limit_is_retried_then_succeeds() {
         .mount(&server)
         .await;
 
-    let configs = client(&server).list_trust("widget").await.unwrap();
+    let configs = client(&server).list_trust("widget", None).await.unwrap();
     assert!(configs.is_empty());
 }
 
@@ -219,7 +219,7 @@ async fn error_codes_map_to_typed_errors() {
             .max_retries(0)
             .build()
             .unwrap();
-        let err = c.list_trust("widget").await.unwrap_err();
+        let err = c.list_trust("widget", None).await.unwrap_err();
         let got = match err {
             Error::Forbidden(_) => "Forbidden",
             Error::NotFound(_) => "NotFound",
