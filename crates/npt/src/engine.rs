@@ -320,8 +320,13 @@ fn dialog_err(e: dialoguer::Error) -> anyhow::Error {
     anyhow::anyhow!("interactive prompt failed: {e}")
 }
 
-/// Prompt for a one-time password. Errors in non-interactive contexts,
-/// matching npm's `otplease` behavior (`docs/api.md` §5.2).
+/// Length bounds for a numeric OTP (npm uses 6-digit TOTP; allow a little slack).
+const OTP_MIN: usize = 6;
+const OTP_MAX: usize = 8;
+
+/// Prompt for a one-time password. Only digits are accepted, `OTP_MIN..=OTP_MAX`
+/// long; invalid input is rejected inline (dialoguer re-asks without clearing).
+/// Errors in non-interactive contexts, matching npm's `otplease` behavior.
 pub fn prompt_otp() -> Result<String> {
     require_tty()?;
     let prompt = crate::i18n::t(
@@ -330,13 +335,27 @@ pub fn prompt_otp() -> Result<String> {
     );
     let otp: String = dialoguer::Input::new()
         .with_prompt(prompt)
+        .validate_with(|input: &String| -> std::result::Result<(), String> {
+            let s = input.trim();
+            if !s.chars().all(|c| c.is_ascii_digit()) {
+                return Err(crate::i18n::t(
+                    "OTP must contain digits only.",
+                    "OTP 只能是数字。",
+                )
+                .to_string());
+            }
+            if !(OTP_MIN..=OTP_MAX).contains(&s.chars().count()) {
+                return Err(crate::i18n::t(
+                    "OTP must be 6–8 digits.",
+                    "OTP 必须是 6–8 位数字。",
+                )
+                .to_string());
+            }
+            Ok(())
+        })
         .interact_text()
         .map_err(dialog_err)?;
-    let otp = otp.trim().to_string();
-    if otp.is_empty() {
-        anyhow::bail!("no OTP entered");
-    }
-    Ok(otp)
+    Ok(otp.trim().to_string())
 }
 
 /// Prompt for a line of input, returning `default` on empty. Errors in
