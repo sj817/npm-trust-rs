@@ -40,7 +40,35 @@ pub fn parse_repository(value: &serde_json::Value) -> Option<String> {
     normalize_github(&raw)
 }
 
-fn normalize_github(raw: &str) -> Option<String> {
+/// Strictly validate and normalize a user-entered GitHub `owner/repo`.
+///
+/// Accepts a bare `owner/repo` or a full GitHub URL; rejects anything else.
+/// GitHub owner/repo name rules: 1–39 chars for owner, ASCII alnum plus
+/// `-`/`_`/`.` for both segments, no leading/trailing slash, exactly two parts.
+pub fn validate_owner_repo(input: &str) -> anyhow::Result<String> {
+    let normalized = normalize_github(input)
+        .ok_or_else(|| anyhow::anyhow!("expected `owner/repo` or a GitHub URL"))?;
+    let (owner, repo) = normalized
+        .split_once('/')
+        .ok_or_else(|| anyhow::anyhow!("expected exactly `owner/repo`"))?;
+    let valid_seg = |s: &str, max: usize| {
+        !s.is_empty()
+            && s.len() <= max
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            && s != "."
+            && s != ".."
+    };
+    if !valid_seg(owner, 39) {
+        anyhow::bail!("invalid GitHub owner `{owner}`");
+    }
+    if !valid_seg(repo, 100) {
+        anyhow::bail!("invalid GitHub repo `{repo}`");
+    }
+    Ok(normalized)
+}
+
+pub fn normalize_github(raw: &str) -> Option<String> {
     // Handle: github:owner/repo, owner/repo, git+https://github.com/owner/repo.git,
     // git@github.com:owner/repo.git, https://github.com/owner/repo
     let s = raw.trim();
@@ -271,5 +299,21 @@ mod tests {
     #[test]
     fn base64_roundtrip() {
         assert_eq!(base64_decode("aGVsbG8=").unwrap(), b"hello");
+    }
+
+    #[test]
+    fn validate_owner_repo_accepts_and_rejects() {
+        assert_eq!(validate_owner_repo("npm/cli").unwrap(), "npm/cli");
+        assert_eq!(
+            validate_owner_repo("https://github.com/npm/cli").unwrap(),
+            "npm/cli"
+        );
+        assert_eq!(
+            validate_owner_repo("git@github.com:npm/cli.git").unwrap(),
+            "npm/cli"
+        );
+        for bad in ["", "just-owner", "a/b/c/d/e", "own er/repo", "owner/"] {
+            assert!(validate_owner_repo(bad).is_err(), "should reject {bad:?}");
+        }
     }
 }

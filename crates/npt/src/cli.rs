@@ -6,22 +6,25 @@ use clap::{Args, Parser, Subcommand};
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "ntr",
+    name = "npt",
     version,
-    about = "Batch-manage npm Trusted Publishing (OIDC) bindings — native, no npm required for trust ops",
+    about = "npm Trusted Publishing (OIDC) — run with no subcommand for the interactive setup wizard",
     long_about = None
 )]
 pub struct Cli {
-    /// Path to the config file (default: ./ntr.toml).
-    #[arg(long, global = true, default_value = "ntr.toml")]
+    /// Path to the config file (default: ./npt.toml).
+    #[arg(long, global = true, default_value = "npt.toml")]
     pub config: PathBuf,
 
     #[command(subcommand)]
-    pub command: CommandKind,
+    pub command: Option<CommandKind>,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum CommandKind {
+    /// Interactive setup wizard for the package in the current directory (also the
+    /// default when no subcommand is given).
+    Init(WizardArgs),
     /// Read-only inventory: package existence + current trust binding vs. target.
     Scan(ScanArgs),
     /// Reconcile bindings toward the desired state (create/revoke, first-publish).
@@ -31,11 +34,35 @@ pub enum CommandKind {
 }
 
 #[derive(Debug, Args)]
+pub struct WizardArgs {
+    /// Directory of the package to configure (default: current directory).
+    #[arg(long, default_value = ".")]
+    pub dir: PathBuf,
+    /// Override the workflow filename to bind (default: from npt.toml / publish.yml).
+    #[arg(long)]
+    pub workflow: Option<String>,
+    /// Walk through the steps without writing to the registry or publishing.
+    /// Local files (package.json repository, workflow template) are still written.
+    #[arg(long)]
+    pub dry_run: bool,
+}
+
+impl Default for WizardArgs {
+    fn default() -> Self {
+        WizardArgs {
+            dir: PathBuf::from("."),
+            workflow: None,
+            dry_run: false,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
 pub struct ScanArgs {
     /// Enumerate repos of this GitHub org/user (needs `gh`).
     #[arg(long)]
     pub org: Option<String>,
-    /// Use the org from ntr.toml `[defaults].org`.
+    /// Use the org from npt.toml `[defaults].org`.
     #[arg(long)]
     pub user: bool,
     /// Local directories to scan for package.json (repeatable).

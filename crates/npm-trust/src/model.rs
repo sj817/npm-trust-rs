@@ -162,7 +162,7 @@ impl TrustConfig {
 
     /// Does this config's provider binding equal `other`'s (ignoring `id`)?
     ///
-    /// Used by `ntr` reconcile to detect drift: the binding differs when the
+    /// Used by `npt` reconcile to detect drift: the binding differs when the
     /// provider claims or permission set differ.
     pub fn same_binding(&self, other: &TrustConfig) -> bool {
         self.provider == other.provider && {

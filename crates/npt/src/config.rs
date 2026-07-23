@@ -1,4 +1,4 @@
-//! `ntr.toml` — default binding rules and per-package exceptions.
+//! `npt.toml` — default binding rules and per-package exceptions.
 
 use std::path::Path;
 
@@ -73,7 +73,7 @@ fn default_true() -> bool {
 }
 
 impl Config {
-    /// Load `ntr.toml` from `path`, or return defaults if it doesn't exist.
+    /// Load `npt.toml` from `path`, or return defaults if it doesn't exist.
     pub fn load(path: &Path) -> Result<Self> {
         if !path.exists() {
             return Ok(Config::default());

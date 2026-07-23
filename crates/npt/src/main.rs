@@ -1,16 +1,20 @@
-//! `ntr` — batch npm Trusted Publishing manager.
+//! `npt` — npm Trusted Publishing manager (interactive wizard + batch commands).
 
 mod cli;
 mod commands;
 mod config;
 mod discover;
 mod engine;
+mod github;
+mod pkgjson;
+mod templates;
+mod wizard;
 
 use std::process::ExitCode;
 
 use clap::Parser;
 
-use crate::cli::{Cli, CommandKind};
+use crate::cli::{Cli, CommandKind, WizardArgs};
 use crate::config::Config;
 
 #[tokio::main]
@@ -38,15 +42,24 @@ async fn run() -> anyhow::Result<ExitCode> {
     let cfg = Config::load(&cli.config)?;
 
     match cli.command {
-        CommandKind::Scan(args) => {
+        // No subcommand → run the interactive wizard with defaults.
+        None => {
+            wizard::run(WizardArgs::default(), &cfg).await?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Some(CommandKind::Init(args)) => {
+            wizard::run(args, &cfg).await?;
+            Ok(ExitCode::SUCCESS)
+        }
+        Some(CommandKind::Scan(args)) => {
             commands::scan::run(args, &cfg).await?;
             Ok(ExitCode::SUCCESS)
         }
-        CommandKind::Sync(args) => {
+        Some(CommandKind::Sync(args)) => {
             commands::sync::run(args, &cfg).await?;
             Ok(ExitCode::SUCCESS)
         }
-        CommandKind::Audit(args) => {
+        Some(CommandKind::Audit(args)) => {
             let code = commands::audit::run(args, &cfg).await?;
             Ok(ExitCode::from(code as u8))
         }

@@ -63,7 +63,7 @@ pub async fn resolve_client(require: bool) -> Result<(Client, bool)> {
 
     let client = Client::builder()
         .token(token.clone())
-        .user_agent(format!("npm-trust-rs/{} ntr", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!("npm-trust-rs/{} npt", env!("CARGO_PKG_VERSION")))
         .build()
         .context("building registry client")?;
 
@@ -95,7 +95,7 @@ pub async fn resolve_client(require: bool) -> Result<(Client, bool)> {
     }
 }
 
-/// Derive the desired trust config for a discovered package, honoring `ntr.toml`
+/// Derive the desired trust config for a discovered package, honoring `npt.toml`
 /// overrides and a CLI `--workflow` override. Returns `None` if we can't determine
 /// a target repository.
 pub fn desired_binding(
@@ -269,6 +269,33 @@ pub fn prompt_otp() -> Result<String> {
         anyhow::bail!("no OTP entered");
     }
     Ok(otp)
+}
+
+/// Prompt for a line of input on the TTY, returning `default` if the user just
+/// hits enter. Errors in non-interactive contexts.
+pub fn prompt_line(prompt: &str, default: Option<&str>) -> Result<String> {
+    if !io::stdin().is_terminal() {
+        anyhow::bail!(
+            "input required ({prompt}) but no interactive terminal is available. \
+             Re-run in a terminal, or use the batch subcommands (scan/sync/audit)."
+        );
+    }
+    match default {
+        Some(d) if !d.is_empty() => eprint!("{prompt} [{d}]: "),
+        _ => eprint!("{prompt}: "),
+    }
+    io::stderr().flush().ok();
+    let mut line = String::new();
+    io::stdin().read_line(&mut line).context("reading input")?;
+    let val = line.trim();
+    if val.is_empty() {
+        match default {
+            Some(d) => Ok(d.to_string()),
+            None => anyhow::bail!("a value is required"),
+        }
+    } else {
+        Ok(val.to_string())
+    }
 }
 
 /// Ask a yes/no question on the TTY. `--yes` short-circuits to true.

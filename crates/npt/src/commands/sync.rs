@@ -1,4 +1,4 @@
-//! `ntr sync` — reconcile actual bindings toward the desired state.
+//! `npt sync` — reconcile actual bindings toward the desired state.
 
 use std::path::PathBuf;
 use std::process::Command;

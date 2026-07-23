@@ -1,6 +1,6 @@
 [package]
-name = "ntr"
-description = "Batch-manage npm Trusted Publishing bindings across your repos/packages"
+name = "npt"
+description = "Interactive wizard + batch tools for npm Trusted Publishing (OIDC)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -8,7 +8,7 @@ repository.workspace = true
 rust-version.workspace = true
 
 [[bin]]
-name = "ntr"
+name = "npt"
 path = "src/main.rs"
 
 [dependencies]
@@ -16,9 +16,10 @@ npm-trust.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 clap.workspace = true
 serde.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
 toml.workspace = true
 anyhow.workspace = true
 dirs.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+reqwest.workspace = true

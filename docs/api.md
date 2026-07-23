@@ -412,7 +412,7 @@ equivalent exponential-backoff retry on `429`/`5xx`/network errors.
 ### Package existence check (public, unauthenticated)
 
 `GET https://registry.npmjs.org/<name>` — `404` = does not exist, `200` = exists. No auth
-required. (Not part of `npm trust`; documented in the project brief and used by `ntr scan`.)
+required. (Not part of `npm trust`; documented in the project brief and used by `npt scan`.)
 
 ---
 

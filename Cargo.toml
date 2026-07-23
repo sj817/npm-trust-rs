@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/npm-trust", "crates/ntr"]
+members = ["crates/npm-trust", "crates/npt"]
 
 [workspace.package]
 version = "0.1.0"

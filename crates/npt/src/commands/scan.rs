@@ -1,4 +1,4 @@
-//! `ntr scan` — read-only inventory of packages and their trust bindings.
+//! `npt scan` — read-only inventory of packages and their trust bindings.
 
 use anyhow::Result;
 

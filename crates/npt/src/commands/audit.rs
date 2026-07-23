@@ -1,4 +1,4 @@
-//! `ntr audit` — read-only reconciliation check. Exit code != 0 on drift (for CI).
+//! `npt audit` — read-only reconciliation check. Exit code != 0 on drift (for CI).
 
 use anyhow::Result;
 use serde_json::json;

@@ -1,8 +1,9 @@
-# ntr.toml — default binding rules for `ntr` (npm Trusted Publishing manager).
-# Copy to `ntr.toml` and edit. All fields are optional.
+# npt.toml — default binding rules for `npt` (npm Trusted Publishing manager).
+# Copy to `npt.toml` and edit. All fields are optional. Used by the wizard and by
+# the batch subcommands (scan/sync/audit).
 
 [defaults]
-# Workflow filename convention. `ntr` derives the target binding as
+# Workflow filename convention. `npt` derives the target binding as
 #   github:<owner/repo>@<workflow>
 # where <owner/repo> comes from each package.json `repository` field.
 workflow = "publish.yml"
@@ -15,12 +16,12 @@ workflow = "publish.yml"
 allow_publish = true
 allow_stage_publish = false
 
-# Default GitHub org/user for `ntr scan --user` (so you can omit --org).
+# Default GitHub org/user for `npt scan --user` (so you can omit --org).
 # org = "sj817"
 
 # ---------------------------------------------------------------------------
 # Per-package overrides / explicit expectations (used for mapping exceptions
-# and by `ntr audit`). Repeat the [[package]] block per package.
+# and by `npt audit`). Repeat the [[package]] block per package.
 # ---------------------------------------------------------------------------
 
 # [[package]]
