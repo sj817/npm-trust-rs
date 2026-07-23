@@ -70,6 +70,13 @@ pub async fn resolve_client(require: bool) -> Result<(Client, bool)> {
     match &cred {
         Some(c) => {
             let mut valid = true;
+            eprintln!(
+                "{}",
+                crate::i18n::t(
+                    "→ verifying npm login (GET /-/whoami)…",
+                    "→ 正在验证 npm 登录(GET /-/whoami)…"
+                )
+            );
             match client.whoami().await {
                 Ok(who) => eprintln!(
                     "{}",

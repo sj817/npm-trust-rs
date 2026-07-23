@@ -79,6 +79,9 @@ impl ClientBuilder {
             Some(c) => c,
             None => reqwest::Client::builder()
                 .user_agent(&self.user_agent)
+                // Fail fast on a stuck network instead of hanging forever.
+                .connect_timeout(Duration::from_secs(8))
+                .timeout(Duration::from_secs(30))
                 .build()?,
         };
         Ok(Client {
