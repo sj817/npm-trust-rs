@@ -8,7 +8,7 @@ use clap::{Args, Parser, Subcommand};
 #[command(
     name = "npt",
     version,
-    about = "npm Trusted Publishing (OIDC) — run with no subcommand for the interactive setup wizard",
+    about = "npm Trusted Publishing (OIDC) — run with no subcommand for the interactive menu",
     long_about = None
 )]
 pub struct Cli {
@@ -22,8 +22,8 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum CommandKind {
-    /// Interactive setup wizard for the package in the current directory (also the
-    /// default when no subcommand is given).
+    /// One-shot setup wizard for the package in the current directory (the menu's
+    /// "one-shot setup" option runs this too).
     Init(WizardArgs),
     /// Read-only inventory: package existence + current trust binding vs. target.
     Scan(ScanArgs),

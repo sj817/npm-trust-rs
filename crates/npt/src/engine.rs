@@ -1,7 +1,7 @@
 //! Shared engine: credentials, client construction, desired-binding derivation,
 //! status classification, and the OTP-aware write wrapper.
 
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, IsTerminal};
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -95,11 +95,11 @@ pub async fn resolve_client(require: bool) -> Result<(Client, bool)> {
             match client.whoami().await {
                 Ok(who) => eprintln!(
                     "{}",
-                    if crate::i18n::is_zh() {
+                    crate::color::ok(&if crate::i18n::is_zh() {
                         format!("→ 已登录:{}(来自 {})", who.username, c.source)
                     } else {
                         format!("→ authenticated as {} (via {})", who.username, c.source)
-                    }
+                    })
                 ),
                 Err(e) => {
                     valid = false;
@@ -303,74 +303,84 @@ impl<'a> Writer<'a> {
     }
 }
 
-/// Prompt for a one-time password on the TTY. Errors in non-interactive contexts,
-/// matching npm's `otplease` behavior (`docs/api.md` §5.2).
-pub fn prompt_otp() -> Result<String> {
+/// Guard: require an interactive terminal, else a clear error (npm 2FA can't be
+/// bypassed for trust writes, and menus/wizard need input).
+fn require_tty() -> Result<()> {
     if !io::stdin().is_terminal() || !io::stderr().is_terminal() {
         anyhow::bail!(
-            "this operation requires a one-time password, but no interactive terminal is \
-             available. Re-run in a terminal (2FA cannot be bypassed for trust writes)."
+            "an interactive terminal is required here. Re-run in a terminal \
+             (2FA/OTP cannot be bypassed for trust writes; use scan/audit for CI)."
         );
     }
-    eprint!(
-        "{}",
-        crate::i18n::t(
-            "This operation requires a one-time password.\nEnter OTP: ",
-            "此操作需要一次性密码(2FA/OTP)。\n请输入 OTP: "
-        )
+    Ok(())
+}
+
+/// Map a dialoguer interaction error (incl. Ctrl+C interrupt) to anyhow.
+fn dialog_err(e: dialoguer::Error) -> anyhow::Error {
+    anyhow::anyhow!("interactive prompt failed: {e}")
+}
+
+/// Prompt for a one-time password. Errors in non-interactive contexts,
+/// matching npm's `otplease` behavior (`docs/api.md` §5.2).
+pub fn prompt_otp() -> Result<String> {
+    require_tty()?;
+    let prompt = crate::i18n::t(
+        "This operation requires a one-time password (2FA/OTP). Enter OTP",
+        "此操作需要一次性密码(2FA/OTP),请输入 OTP",
     );
-    io::stderr().flush().ok();
-    let mut line = String::new();
-    io::stdin()
-        .read_line(&mut line)
-        .context("reading OTP from stdin")?;
-    let otp = line.trim().to_string();
+    let otp: String = dialoguer::Input::new()
+        .with_prompt(prompt)
+        .interact_text()
+        .map_err(dialog_err)?;
+    let otp = otp.trim().to_string();
     if otp.is_empty() {
         anyhow::bail!("no OTP entered");
     }
     Ok(otp)
 }
 
-/// Prompt for a line of input on the TTY, returning `default` if the user just
-/// hits enter. Errors in non-interactive contexts.
+/// Prompt for a line of input, returning `default` on empty. Errors in
+/// non-interactive contexts.
 pub fn prompt_line(prompt: &str, default: Option<&str>) -> Result<String> {
-    if !io::stdin().is_terminal() {
-        anyhow::bail!(
-            "input required ({prompt}) but no interactive terminal is available. \
-             Re-run in a terminal, or use the batch subcommands (scan/sync/audit)."
-        );
-    }
-    match default {
-        Some(d) if !d.is_empty() => eprint!("{prompt} [{d}]: "),
-        _ => eprint!("{prompt}: "),
-    }
-    io::stderr().flush().ok();
-    let mut line = String::new();
-    io::stdin().read_line(&mut line).context("reading input")?;
-    let val = line.trim();
-    if val.is_empty() {
-        match default {
-            Some(d) => Ok(d.to_string()),
-            None => anyhow::bail!("a value is required"),
+    require_tty()?;
+    let mut input = dialoguer::Input::<String>::new().with_prompt(prompt);
+    if let Some(d) = default {
+        if !d.is_empty() {
+            input = input.default(d.to_string());
         }
-    } else {
-        Ok(val.to_string())
+    }
+    let val = input.interact_text().map_err(dialog_err)?;
+    Ok(val.trim().to_string())
+}
+
+/// Prompt for a line with a validator; re-asks until it passes. `validate` returns
+/// the normalized value on success or an error message shown to the user.
+pub fn prompt_validated(
+    prompt: &str,
+    default: Option<&str>,
+    validate: impl Fn(&str) -> std::result::Result<String, String>,
+) -> Result<String> {
+    require_tty()?;
+    loop {
+        let raw = prompt_line(prompt, default)?;
+        match validate(&raw) {
+            Ok(v) => return Ok(v),
+            Err(msg) => eprintln!("{}", crate::color::err(&format!("  {msg}"))),
+        }
     }
 }
 
-/// Ask a yes/no question on the TTY. `--yes` short-circuits to true.
+/// Ask a yes/no question. `--yes` short-circuits to true.
 pub fn confirm(prompt: &str, assume_yes: bool) -> Result<bool> {
     if assume_yes {
         return Ok(true);
     }
-    if !io::stdin().is_terminal() {
-        anyhow::bail!("confirmation required but not a TTY; pass --yes to proceed non-interactively");
-    }
-    eprint!("{prompt} (y/N) ");
-    io::stderr().flush().ok();
-    let mut line = String::new();
-    io::stdin().read_line(&mut line)?;
-    Ok(matches!(line.trim().to_lowercase().as_str(), "y" | "yes"))
+    require_tty()?;
+    dialoguer::Confirm::new()
+        .with_prompt(prompt)
+        .default(false)
+        .interact()
+        .map_err(dialog_err)
 }
 
 /// Human summary of a trust config's binding.
@@ -397,5 +407,13 @@ pub fn describe_binding(cfg: &TrustConfig) -> String {
         Provider::Circleci { claims } => {
             format!("circleci:{} [{}]", claims.vcs_origin, perms)
         }
+    }
+}
+
+/// The GitHub `owner/repo` a binding targets, if it's a GitHub binding.
+pub fn binding_repo(cfg: &TrustConfig) -> Option<&str> {
+    match &cfg.provider {
+        npm_trust::Provider::Github { claims } => Some(&claims.repository),
+        _ => None,
     }
 }
