@@ -6,7 +6,6 @@
 //! lives here. UI text is localized via [`crate::i18n`] (errors stay English).
 
 use std::path::Path;
-use std::process::Command;
 
 use anyhow::{Context, Result};
 use npm_trust::TrustConfig;
@@ -445,7 +444,7 @@ fn publish_placeholder(name: &str) -> Result<()> {
             format!("→ 正在发布占位版 {name}@0.0.1(如需要 npm 会提示输入 OTP)…")
         )
     );
-    let mut cmd = Command::new("npm");
+    let mut cmd = engine::npm_command();
     cmd.arg("publish").current_dir(&tmp);
     if name.starts_with('@') {
         // Scoped packages default to restricted; make the first publish public.

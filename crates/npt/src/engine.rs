@@ -2,9 +2,24 @@
 //! status classification, and the OTP-aware write wrapper.
 
 use std::io::{self, IsTerminal, Write};
+use std::process::Command;
 
 use anyhow::{Context, Result};
 use npm_trust::{npmrc, Client, Error, TrustConfig};
+
+/// Build a `Command` that invokes npm.
+///
+/// On Windows npm is `npm.cmd` (a batch script), which `Command::new("npm")` can't
+/// launch directly (CreateProcess ignores PATHEXT), so we go through `cmd /C npm`.
+pub fn npm_command() -> Command {
+    if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.args(["/C", "npm"]);
+        c
+    } else {
+        Command::new("npm")
+    }
+}
 
 use crate::config::Config;
 use crate::discover::DiscoveredPackage;

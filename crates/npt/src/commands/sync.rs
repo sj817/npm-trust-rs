@@ -1,7 +1,6 @@
 //! `npt sync` — reconcile actual bindings toward the desired state.
 
 use std::path::PathBuf;
-use std::process::Command;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -218,7 +217,7 @@ fn publish(name: &str, dir: Option<&std::path::Path>, placeholder: bool) -> Resu
         );
     }
     println!("→ publishing {name} via `npm publish` in {}", dir.display());
-    let status = Command::new("npm")
+    let status = crate::engine::npm_command()
         .arg("publish")
         .current_dir(dir)
         .status()

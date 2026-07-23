@@ -79,6 +79,9 @@ jobs:
       - name: Assemble & publish
         run: node scripts/assemble-npm.mjs --artifacts artifacts --version "${GITHUB_REF_NAME#v}" --publish
         env:
-          # Use a token; or switch to OIDC by enabling id-token: write above and
-          # configuring Trusted Publishing for these packages on npmjs.com.
+          # BOOTSTRAP ONLY. Trusted Publishing (OIDC) can't be configured for a package
+          # that doesn't exist yet — so the *first* publish of these packages needs a
+          # token. After the first release, use `npt` to bind each package to this repo +
+          # workflow, then delete NPM_TOKEN, enable `id-token: write` in this job's
+          # permissions, and republish tokenlessly via OIDC.
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
