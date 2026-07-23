@@ -1,0 +1,35 @@
+{
+  "name": "@qwqojs/npt",
+  "version": "0.1.0",
+  "description": "npm Trusted Publishing (OIDC) setup wizard + batch tools — native Rust CLI, no npm version requirement",
+  "keywords": [
+    "npm",
+    "trusted-publishing",
+    "oidc",
+    "provenance",
+    "cli"
+  ],
+  "homepage": "https://github.com/sj817/npm-trust-rs#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sj817/npm-trust-rs.git"
+  },
+  "license": "MIT OR Apache-2.0",
+  "bin": {
+    "npt": "bin.js"
+  },
+  "files": [
+    "bin.js"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "optionalDependencies": {
+    "@qwqojs/npt-win32-x64": "0.1.0",
+    "@qwqojs/npt-win32-arm64": "0.1.0",
+    "@qwqojs/npt-darwin-x64": "0.1.0",
+    "@qwqojs/npt-darwin-arm64": "0.1.0",
+    "@qwqojs/npt-linux-x64": "0.1.0",
+    "@qwqojs/npt-linux-arm64": "0.1.0"
+  }
+}

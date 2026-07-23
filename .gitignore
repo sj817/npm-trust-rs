@@ -3,3 +3,6 @@
 Cargo.lock.orig
 .DS_Store
 /selftest
+/npm/dist
+/artifacts
+node_modules

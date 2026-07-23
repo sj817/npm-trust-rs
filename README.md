@@ -15,6 +15,23 @@ is only shelled out for a brand-new package's first (placeholder) release.
 
 ## Install
 
+**Via npm (recommended — no Rust toolchain needed):**
+
+```sh
+npm install -g @qwqojs/npt
+npt            # run the wizard in your package directory
+```
+
+The binary ships as a platform-specific optional dependency
+(`@qwqojs/npt-<platform>-<arch>`, built for win32/darwin/linux × x64/arm64); npm installs
+only the one matching your OS/CPU via its `os`/`cpu` fields. The launcher
+([`npm/npt/bin.js`](npm/npt/bin.js)) resolves and execs it. This is the same pattern
+esbuild/biome/swc use. See [`scripts/assemble-npm.mjs`](scripts/assemble-npm.mjs) and
+[`.github/workflows/release.yml`](.github/workflows/release.yml) for how the packages are
+built and published.
+
+**From source (Rust):**
+
 ```sh
 cargo install --path crates/npt     # or: cargo build --release
 ```
