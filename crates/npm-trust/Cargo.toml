@@ -1,0 +1,23 @@
+[package]
+name = "npm-trust"
+description = "Native Rust client for the npm registry Trusted Publishing (OIDC) API"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+reqwest.workspace = true
+url.workspace = true
+tracing.workspace = true
+dirs.workspace = true
+tokio = { version = "1", features = ["time"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+wiremock = "0.6"
+serde_json.workspace = true
