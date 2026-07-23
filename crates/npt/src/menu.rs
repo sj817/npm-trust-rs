@@ -3,10 +3,10 @@
 //! Package-centric: operates on the package.json in the current directory. Reuses
 //! the wizard's helpers and the OTP-aware [`Writer`] for all registry work.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use dialoguer::{theme::ColorfulTheme, Select};
+use dialoguer::{theme::ColorfulTheme, MultiSelect, Select};
 use npm_trust::{Client, TrustConfig};
 
 use crate::cli::{AuditArgs, ScanArgs, WizardArgs};
@@ -32,6 +32,7 @@ enum Action {
     Revoke,
     GenCi,
     Publish,
+    Batch,
     Scan,
     Audit,
     Quit,
@@ -116,11 +117,12 @@ pub async fn run(cfg: &Config) -> Result<()> {
                         t("Publish a minimal placeholder version now?", "现在发布最小占位版本吗?"),
                         false,
                     )? {
-                        wizard::publish_placeholder(n)?;
+                        wizard::publish_placeholder(n, None)?;
                         refresh(&client, name.as_deref(), &mut snap).await;
                     }
                 }
             }
+            Action::Batch => batch(&client, cfg).await?,
             Action::Scan => {
                 crate::commands::scan::run(scan_args(), cfg).await?;
             }
@@ -142,6 +144,10 @@ fn menu_items(has_pkg: bool) -> Vec<(String, Action)> {
         items.push((t("Generate / update CI workflow", "生成 / 更新 CI workflow 模板").into(), Action::GenCi));
         items.push((t("Publish placeholder version", "发布占位版(首发)").into(), Action::Publish));
     }
+    items.push((
+        t("Batch setup (scan a dir, one OTP)", "批量配置(扫描目录,一次 OTP)").into(),
+        Action::Batch,
+    ));
     items.push((t("Scan (batch)", "扫描 scan(批量)").into(), Action::Scan));
     items.push((t("Audit (batch)", "审计 audit(批量)").into(), Action::Audit));
     items.push((t("Quit", "退出").into(), Action::Quit));
@@ -344,6 +350,188 @@ fn gen_ci(cfg: &Config) -> Result<()> {
         },
     )?;
     wizard::ensure_workflow_file(Path::new("."), &workflow)
+}
+
+/// Batch: scan a directory for packages, multi-select, then for each selected
+/// package first-publish a placeholder (if needed) and bind it — reusing one OTP
+/// across the whole batch (npm's ~5-minute 2FA window).
+async fn batch(client: &Client, cfg: &Config) -> Result<()> {
+    let dir = engine::prompt_line(
+        t("Directory to scan for packages", "要扫描的目录"),
+        Some("."),
+    )?;
+    let found = crate::discover::discover_local(&[PathBuf::from(&dir)])?;
+    let candidates: Vec<_> = found
+        .into_iter()
+        .filter(|p| !p.private && !p.name.is_empty())
+        .collect();
+    if candidates.is_empty() {
+        println!(
+            "{}",
+            color::warn(t(
+                "No configurable packages found (need non-private package.json with a name).",
+                "未找到可配置的包(需非 private 且含 name 的 package.json)。"
+            ))
+        );
+        return Ok(());
+    }
+
+    let labels: Vec<String> = candidates
+        .iter()
+        .map(|p| match &p.repository {
+            Some(r) => format!("{}  → {r}", p.name),
+            None => format!("{}  {}", p.name, t("(no repository — will skip)", "(无 repository,将跳过)")),
+        })
+        .collect();
+    let picked = MultiSelect::with_theme(&ColorfulTheme::default())
+        .with_prompt(t(
+            "Select packages (space toggles, enter confirms)",
+            "勾选要配置的包(空格切换,回车确认)",
+        ))
+        .items(&labels)
+        .defaults(&vec![true; candidates.len()])
+        .interact_opt()
+        .ok()
+        .flatten();
+    let Some(picked) = picked else { return Ok(()) };
+    let chosen: Vec<&crate::discover::DiscoveredPackage> =
+        picked.iter().map(|&i| &candidates[i]).collect();
+    let bindable = chosen.iter().filter(|p| p.repository.is_some()).count();
+    if bindable == 0 {
+        println!(
+            "{}",
+            color::warn(t(
+                "None of the selected packages has a repository to bind.",
+                "所选包都没有可绑定的 repository。"
+            ))
+        );
+        return Ok(());
+    }
+
+    println!(
+        "{}",
+        m(
+            format!("Will configure {bindable} package(s): first-publish placeholder if unpublished, then bind."),
+            format!("将配置 {bindable} 个包:未发布则首发占位,然后绑定。")
+        )
+    );
+    if !engine::confirm(
+        t("Proceed? You'll enter your OTP once.", "继续?只需输入一次 OTP。"),
+        false,
+    )? {
+        return Ok(());
+    }
+
+    let mut otp = engine::prompt_otp()?;
+    let mut writer = Writer::with_otp(client, otp.clone());
+    let (mut ok, mut fail) = (0u32, 0u32);
+
+    for p in &chosen {
+        let name = &p.name;
+        println!("\n{}", color::title(&format!("── {name} ──")));
+        let Some(repo) = p.repository.clone() else {
+            eprintln!(
+                "{}",
+                color::warn(t("  skipped: package.json has no repository.", "  跳过:package.json 无 repository。"))
+            );
+            fail += 1;
+            continue;
+        };
+
+        // First-publish a placeholder if the package doesn't exist. Retry on OTP
+        // expiry; blank OTP skips this package.
+        match client.package_exists(name).await {
+            Ok(false) => {
+                let mut published = false;
+                loop {
+                    match wizard::publish_placeholder(name, Some(&otp)) {
+                        Ok(()) => {
+                            published = true;
+                            break;
+                        }
+                        Err(e) => {
+                            eprintln!("{}", color::warn(&format!("  publish failed: {e}")));
+                            match engine::prompt_otp_optional(t(
+                                "  re-enter OTP to retry (blank to skip this package)",
+                                "  重输 OTP 重试(留空跳过该包)",
+                            ))? {
+                                Some(o) => {
+                                    otp = o;
+                                    writer.set_otp(otp.clone());
+                                }
+                                None => break,
+                            }
+                        }
+                    }
+                }
+                if !published {
+                    fail += 1;
+                    continue;
+                }
+            }
+            Ok(true) => {}
+            Err(e) => {
+                eprintln!("{}", color::warn(&format!("  existence check failed: {e}")));
+                fail += 1;
+                continue;
+            }
+        }
+
+        // Bind (create, or revoke+create on drift).
+        let desired = TrustConfig::github(
+            repo,
+            cfg.defaults.workflow.clone(),
+            cfg.defaults.environment.clone(),
+            cfg.default_permissions(),
+        );
+        let existing = match writer.list(name).await {
+            Ok(v) => v.into_iter().next(),
+            Err(e) => {
+                eprintln!("{}", color::warn(&format!("  list failed: {e}")));
+                fail += 1;
+                continue;
+            }
+        };
+        let outcome: Result<&str> = async {
+            match &existing {
+                Some(a) if a.same_binding(&desired) => Ok("already"),
+                Some(a) => {
+                    writer.revoke(name, &a.id.clone().unwrap_or_default()).await?;
+                    writer.create(name, &desired).await?;
+                    Ok("updated")
+                }
+                None => {
+                    writer.create(name, &desired).await?;
+                    Ok("created")
+                }
+            }
+        }
+        .await;
+        match outcome {
+            Ok(kind) => {
+                let label = match kind {
+                    "already" => t("already bound", "已正确绑定"),
+                    "updated" => t("rebound", "已改绑"),
+                    _ => t("bound", "已绑定"),
+                };
+                println!("{}", color::ok(&format!("  ✓ {label}: {}", describe_binding(&desired))));
+                ok += 1;
+            }
+            Err(e) => {
+                eprintln!("{}", color::warn(&format!("  bind failed: {e}")));
+                fail += 1;
+            }
+        }
+    }
+
+    println!(
+        "\n{}",
+        color::ok(&m(
+            format!("Done: {ok} configured, {fail} failed/skipped."),
+            format!("完成:成功 {ok} 个,失败/跳过 {fail} 个。")
+        ))
+    );
+    Ok(())
 }
 
 fn scan_args() -> ScanArgs {

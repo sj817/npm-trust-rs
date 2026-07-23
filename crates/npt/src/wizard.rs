@@ -199,7 +199,7 @@ pub async fn run(args: WizardArgs, cfg: &Config) -> Result<()> {
             );
             return Ok(());
         }
-        publish_placeholder(&name)?;
+        publish_placeholder(&name, None)?;
     }
 
     // 9. Create or rebuild the binding.
@@ -430,9 +430,11 @@ pub(crate) fn print_next_steps(owner_repo: &str, workflow: &str) {
 }
 
 /// Publish a minimal placeholder version from a throwaway temp directory, so we
-/// don't publish the user's (possibly unready) working tree. OTP is handled by
-/// `npm publish` itself.
-pub(crate) fn publish_placeholder(name: &str) -> Result<()> {
+/// don't publish the user's (possibly unready) working tree.
+///
+/// If `otp` is given it's passed as `npm publish --otp=<code>` (batch flows reuse one
+/// OTP across many publishes); otherwise npm prompts for 2FA itself.
+pub(crate) fn publish_placeholder(name: &str, otp: Option<&str>) -> Result<()> {
     let slug = name.replace(['@', '/'], "-");
     let tmp = std::env::temp_dir().join(format!("npt-placeholder-{slug}-{}", std::process::id()));
     std::fs::create_dir_all(&tmp).with_context(|| format!("creating temp dir {}", tmp.display()))?;
@@ -464,6 +466,9 @@ pub(crate) fn publish_placeholder(name: &str) -> Result<()> {
     if name.starts_with('@') {
         // Scoped packages default to restricted; make the first publish public.
         cmd.args(["--access", "public"]);
+    }
+    if let Some(o) = otp {
+        cmd.arg(format!("--otp={o}"));
     }
     let status = cmd
         .status()

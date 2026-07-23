@@ -259,6 +259,19 @@ impl<'a> Writer<'a> {
         Writer { client, otp: None }
     }
 
+    /// Pre-seed an OTP (batch flows: prompt once, reuse across many writes).
+    pub fn with_otp(client: &'a Client, otp: String) -> Self {
+        Writer {
+            client,
+            otp: Some(otp),
+        }
+    }
+
+    /// Replace the cached OTP (e.g. after the window expired and the user re-entered).
+    pub fn set_otp(&mut self, otp: String) {
+        self.otp = Some(otp);
+    }
+
     /// List configs, prompting for OTP on challenge (reads can require 2FA too).
     pub async fn list(&mut self, package: &str) -> Result<Vec<TrustConfig>> {
         loop {
@@ -356,6 +369,32 @@ pub fn prompt_otp() -> Result<String> {
         .interact_text()
         .map_err(dialog_err)?;
     Ok(otp.trim().to_string())
+}
+
+/// Like [`prompt_otp`] but a blank line returns `None` (used to skip a package in
+/// batch flows).
+pub fn prompt_otp_optional(prompt: &str) -> Result<Option<String>> {
+    require_tty()?;
+    let val: String = dialoguer::Input::new()
+        .with_prompt(prompt)
+        .allow_empty(true)
+        .validate_with(|input: &String| -> std::result::Result<(), String> {
+            let s = input.trim();
+            if s.is_empty() {
+                return Ok(());
+            }
+            if !s.chars().all(|c| c.is_ascii_digit()) {
+                return Err(crate::i18n::t("OTP must contain digits only.", "OTP 只能是数字。").to_string());
+            }
+            if !(OTP_MIN..=OTP_MAX).contains(&s.chars().count()) {
+                return Err(crate::i18n::t("OTP must be 6–8 digits.", "OTP 必须是 6–8 位数字。").to_string());
+            }
+            Ok(())
+        })
+        .interact_text()
+        .map_err(dialog_err)?;
+    let s = val.trim().to_string();
+    Ok(if s.is_empty() { None } else { Some(s) })
 }
 
 /// Prompt for a line of input, returning `default` on empty. Errors in
