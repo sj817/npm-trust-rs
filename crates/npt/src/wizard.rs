@@ -47,6 +47,29 @@ pub async fn run(args: WizardArgs, cfg: &Config) -> Result<()> {
         );
     }
 
+    // 0. Confirm this is a package directory FIRST (before any network), so a
+    //    wrong cwd fails instantly with a clear hint instead of a raw os error.
+    let pkg_path = dir.join("package.json");
+    if !pkg_path.exists() {
+        let abs = std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+        let abs = abs.display().to_string();
+        let abs = abs.strip_prefix(r"\\?\").unwrap_or(&abs);
+        eprintln!(
+            "{}",
+            m(
+                format!(
+                    "✗ Not an npm package — no package.json in this directory.\n  here: {abs}\n  \
+                     → cd into your package directory (the one containing package.json), then run `npt`."
+                ),
+                format!(
+                    "✗ 当前目录不是 npm 包 —— 这里没有 package.json。\n  当前目录:{abs}\n  \
+                     → 请先 cd 到你的 npm 包目录(含 package.json),再运行 `npt`。"
+                )
+            )
+        );
+        std::process::exit(2);
+    }
+
     // 1. Login. resolve_client(require = true) prints identity and errors out if
     //    credentials are missing or invalid.
     let (client, _valid) = engine::resolve_client(true).await?;
