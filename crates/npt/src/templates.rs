@@ -3,8 +3,8 @@
 /// Render a GitHub Actions workflow that publishes to the public npm registry via
 /// OIDC (no token). `id-token: write` is what makes trusted publishing work.
 ///
-/// Note: the runner needs npm ≥ 11.5 for OIDC publish; `actions/setup-node@v4`
-/// installs a recent Node/npm, and we upgrade npm defensively.
+/// Node 24 ships npm >= 11.5 (which supports OIDC publish), so no npm upgrade step
+/// is needed.
 pub fn github_publish_workflow() -> &'static str {
     r#"name: Publish
 
@@ -23,9 +23,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           registry-url: https://registry.npmjs.org
-      - run: npm install -g npm@latest   # ensure npm >= 11.5 for OIDC publish
       - run: npm ci
       - run: npm publish
 "#

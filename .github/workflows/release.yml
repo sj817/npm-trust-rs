@@ -57,9 +57,9 @@ jobs:
     name: assemble & publish
     needs: build
     runs-on: ubuntu-latest
-    # For npm Trusted Publishing (OIDC) instead of a token, uncomment:
-    # permissions:
-    #   id-token: write
+    permissions:
+      contents: read
+      id-token: write        # npm Trusted Publishing (OIDC) — tokenless publish
     steps:
       - uses: actions/checkout@v4
 
@@ -70,18 +70,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24     # ships npm >= 11.5, which supports OIDC publish
           registry-url: https://registry.npmjs.org
 
-      - name: Upgrade npm (OIDC publish needs >= 11.5)
-        run: npm install -g npm@latest
-
-      - name: Assemble & publish
+      - name: Assemble & publish (OIDC, no token)
         run: node scripts/assemble-npm.mjs --artifacts artifacts --version "${GITHUB_REF_NAME#v}" --publish
-        env:
-          # BOOTSTRAP ONLY. Trusted Publishing (OIDC) can't be configured for a package
-          # that doesn't exist yet — so the *first* publish of these packages needs a
-          # token. After the first release, use `npt` to bind each package to this repo +
-          # workflow, then delete NPM_TOKEN, enable `id-token: write` in this job's
-          # permissions, and republish tokenlessly via OIDC.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
