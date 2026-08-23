@@ -1,8 +1,5 @@
-/target
-**/*.rs.bk
-Cargo.lock.orig
+/dist
+node_modules
 .DS_Store
 /selftest
-/npm/dist
-/artifacts
-node_modules
+*.tsbuildinfo

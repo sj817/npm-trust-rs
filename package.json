@@ -1,0 +1,73 @@
+{
+  "name": "@qwqo/npm-trust",
+  "version": "0.1.0",
+  "description": "npm Trusted Publishing (OIDC) setup wizard + batch tools — native TypeScript, no npm version requirement",
+  "keywords": [
+    "npm",
+    "trusted-publishing",
+    "oidc",
+    "provenance",
+    "cli",
+    "npt",
+    "github-actions",
+    "supply-chain",
+    "2fa"
+  ],
+  "homepage": "https://github.com/sj817/npm-trust#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sj817/npm-trust.git"
+  },
+  "bugs": {
+    "url": "https://github.com/sj817/npm-trust/issues"
+  },
+  "author": "sj817 (https://github.com/sj817)",
+  "license": "MIT OR Apache-2.0",
+  "type": "module",
+  "bin": {
+    "npt": "dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/registry/index.d.ts",
+      "default": "./dist/registry/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "LICENSE-MIT",
+    "LICENSE-APACHE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "7.9.0",
+    "commander": "13.1.0",
+    "picocolors": "1.1.1"
+  },
+  "devDependencies": {
+    "@qwqo/eslint-config": "0.2.2",
+    "@qwqo/prettier-config": "0.2.2",
+    "@types/node": "26.1.1",
+    "eslint": "10.8.0",
+    "eslint-import-resolver-typescript": "4.4.5",
+    "prettier": "3.9.6",
+    "tsdown": "0.22.14",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

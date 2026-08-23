@@ -1,0 +1,30 @@
+name: Publish
+
+# Build the TypeScript package and publish `@qwqo/npm-trust` to npm via OIDC Trusted
+# Publishing (tokenless). Trigger by creating a GitHub Release.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # npm Trusted Publishing (OIDC) — tokenless publish
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # ships npm >= 11.5, which supports OIDC publish
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - run: npm publish # no NODE_AUTH_TOKEN — tokenless via OIDC

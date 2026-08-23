@@ -1,157 +1,82 @@
-# npm-trust-rs
+# npt — npm Trusted Publishing (OIDC) manager
 
-**Set up npm [Trusted Publishing](https://docs.npmjs.com/trusted-publishers) (OIDC) with
-one interactive command — no npm upgrade required.**
+[![CI](https://github.com/sj817/npm-trust/actions/workflows/ci.yml/badge.svg)](https://github.com/sj817/npm-trust/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@qwqo/npm-trust.svg)](https://www.npmjs.com/package/@qwqo/npm-trust)
+[![node](https://img.shields.io/node/v/@qwqo/npm-trust.svg)](https://nodejs.org)
+[![license](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license-许可)
 
-npm's Trusted Publishing lets a CI workflow publish packages without a long-lived token,
-but wiring up each package (repo + workflow binding, `id-token` permissions, first publish)
-is fiddly. The official `npm trust` command helps — **but only on npm ≥ 11.15.0**.
+`npt` sets up and manages npm Trusted Publishing (OIDC / provenance) bindings: an interactive wizard, batch tools, and a native TypeScript client for the npm registry trust API. Pure ESM, zero config files, no `gh` CLI required.
 
-`npm-trust-rs` reimplements the underlying registry API natively in Rust. **Trust
-operations have zero dependency on your local npm version** — they talk to
-`registry.npmjs.org` directly and work even with npm 9/10, or with no npm installed at all.
-Your local npm login (`~/.npmrc` `_authToken`) is reused automatically, and `npm publish`
-is only shelled out for a brand-new package's first (placeholder) release.
+`npt` 用于配置和管理 npm 可信任发布（Trusted Publishing，OIDC / provenance）绑定，提供交互式向导、批量工具，以及原生 TypeScript 实现的 npm registry trust API 客户端。纯 ESM，无配置文件，不依赖 `gh` CLI。
 
-## Install
-
-**Via npm (recommended — no Rust toolchain needed):**
+## Install 安装
 
 ```sh
-npm install -g @qwqojs/npt
-npt            # run the wizard in your package directory
+npx @qwqo/npm-trust             # run directly 直接运行
+npm i -g @qwqo/npm-trust        # or install the `npt` command 或全局安装 npt 命令
 ```
 
-The binary ships as a platform-specific optional dependency
-(`@qwqojs/npt-<platform>-<arch>`, built for win32/darwin/linux × x64/arm64); npm installs
-only the one matching your OS/CPU via its `os`/`cpu` fields. The launcher
-([`npm/npt/bin.js`](npm/npt/bin.js)) resolves and execs it. This is the same pattern
-esbuild/biome/swc use. See [`scripts/assemble-npm.mjs`](scripts/assemble-npm.mjs) and
-[`.github/workflows/release.yml`](.github/workflows/release.yml) for how the packages are
-built and published.
+Requires Node.js >= 18. UI is bilingual (English / 中文), auto-detected from the locale; override with `NPT_LANG=zh|en`.
 
-**From source (Rust):**
+要求 Node.js 18 及以上。界面按系统语言自动切换中英文，也可以用 `NPT_LANG=zh|en` 指定。
 
-```sh
-cargo install --path crates/npt     # or: cargo build --release
-```
+## Usage 使用
 
-## Use it — the wizard
+Run `npt` with no arguments for the interactive menu — status, wizard, bind / revoke, CI template, and batch setup. Or use the subcommands directly:
 
-Run `npt` inside your package directory. With no subcommand it launches an interactive
-wizard that configures **the package in the current directory** end-to-end:
+不带参数运行 `npt` 进入交互式菜单，覆盖状态查看、向导、绑定与撤销、CI 模板生成和批量配置。也可以直接使用子命令：
 
-```sh
-npt
-```
+| Command     | Description                                         | 说明                            |
+| ----------- | --------------------------------------------------- | ------------------------------- |
+| `npt init`  | One-shot setup wizard for the current directory     | 当前目录包的一键配置向导        |
+| `npt scan`  | Read-only inventory: existence + binding vs. target | 只读清单，对比当前绑定与目标    |
+| `npt audit` | CI drift check, non-zero exit on drift              | CI 漂移检查，有漂移时退出码非 0 |
+| `npt sync`  | Reconcile bindings: create / revoke, first-publish  | 纠偏，创建或撤销绑定、首发      |
 
-```
-1. Checks you're logged in (reuses ~/.npmrc / NPM_TOKEN; exits if not).
-2. Reads package.json's name.
-3. Checks whether it's published on the registry.
-4. Ensures a valid GitHub `repository` field — prompts + validates + writes it back.
-5. Asks for the CI workflow filename; generates a Trusted-Publishing workflow template
-   at .github/workflows/<file> if it doesn't exist.
-6. Verifies the GitHub repo exists (warns + asks before continuing if not).
-7. If the package is new, publishes a minimal placeholder version to reserve the name.
-8. Creates (or reconciles) the trusted-publisher binding — prompts once for your OTP.
-9. Prints the next step: push the workflow and publish via a GitHub Release.
-```
+Common flags 常用参数: `--dir <path...>`, `--org <owner>`, `--workflow <file>` (default `publish.yml`), `--environment <name>`. See `npt <cmd> --help`.
 
-Add `--dry-run` to walk the steps without any registry writes or publishes (local files
-like the workflow template are still written), or `--dir <path>` to target another package.
+The wizard derives the `github:<owner/repo>@<workflow>` binding from `package.json`, scaffolds the CI workflow, first-publishes a placeholder when the name is still unused, then creates the trust binding. Batch mode scans a directory, lets packages be multi-selected, and reuses one OTP across the whole batch (npm's 2FA window lasts about 5 minutes).
 
-## Batch subcommands (many packages)
+向导从 `package.json` 推导 `github:<owner/repo>@<workflow>` 绑定，生成 CI workflow 模板；包名未被占用时先发布占位版本，再创建信任绑定。批量模式扫描目录后勾选多个包一次性配置，整批只需输入一次 OTP（npm 的 2FA 窗口约 5 分钟）。
 
-For managing bindings across many repos/packages, the batch commands are still here:
+GitHub scanning (`--org`) and repo checks use the anonymous GitHub REST API. Set `GITHUB_TOKEN` (or `GH_TOKEN`) to raise the rate limit and see private repos.
 
-```
-npt scan  [--org <org>] [--user] [--dir <path>...] [--workflow <file>]
-    Read-only inventory: package | published? | binding status (missing/correct/DRIFT) |
-    target. Runs without credentials (binding status is then "unknown").
+GitHub 扫描（`--org`）与仓库检查走匿名 GitHub REST API。设置 `GITHUB_TOKEN`（或 `GH_TOKEN`）可提高限额并访问私有仓库。
 
-npt sync  [--dry-run] [--workflow <file>] [--placeholder | --no-publish] [--yes]
-    Reconcile toward the desired state: first-publish, create, or revoke+recreate on drift.
-    Summarizes the plan, confirms, and spaces trust writes ~2s apart.
+## Authentication 认证
 
-npt audit [--json] [--dir <path>...]
-    CI drift gate: expected vs. actual, exit code != 0 on drift.
-```
+`npt` reuses existing npm credentials — the `//registry.npmjs.org/:_authToken` line in the user `.npmrc` (`${VAR}` is expanded), or the `NPM_TOKEN` environment variable. Trust writes require account-level 2FA: `npt` prompts for an OTP when the registry challenges and reuses it across a batch. Read-only `scan` / `audit` never prompt.
 
-### Configuration — `npt.toml`
+`npt` 直接复用现有 npm 凭据：用户 `.npmrc` 中的 `//registry.npmjs.org/:_authToken`（支持 `${VAR}` 展开），或环境变量 `NPM_TOKEN`。信任配置的写操作要求账户级 2FA，registry 发起质询时会提示输入 OTP，并在批量操作中复用；只读的 `scan` / `audit` 不会提示。
 
-Copy [`npt.toml.example`](npt.toml.example) to `npt.toml` to set the default workflow
-filename, allowed actions, default org, and per-package mapping exceptions. Optional — the
-wizard works without it.
+## How it works 发布原理
 
-## Authentication
+The wizard scaffolds `.github/workflows/publish.yml` — a GitHub Actions job with `id-token: write` that runs `npm publish` with no token. Once the trust binding exists on npm and that workflow runs on the repo's default branch, releases publish tokenlessly via OIDC. This repo publishes itself the same way.
 
-Credentials are resolved automatically (see [`docs/api.md`](docs/api.md) §2):
+向导生成的 `.github/workflows/publish.yml` 是一个带 `id-token: write` 权限的 GitHub Actions 任务，不带 token 执行 `npm publish`。只要 npm 上的信任绑定存在、且该 workflow 在仓库默认分支上运行，发布就通过 OIDC 免 token 完成。本仓库自身也用这种方式发布。
 
-1. `//registry.npmjs.org/:_authToken=…` in `~/.npmrc` (with `${VAR}` expansion),
-2. the `NPM_TOKEN` environment variable,
-3. otherwise you're asked to `npm login`.
+Two caveats 两点注意:
 
-At startup `npt` calls `GET /-/whoami` to validate the token and show who you are. Only read
-operations work unauthenticated (package existence).
+- A package must exist on the registry before a binding can be created (hence the placeholder first-publish), and npm allows one trust config per package — changing it means revoke + create. 创建绑定前包必须已存在于 registry（所以需要占位首发）；npm 每个包只允许一条信任配置，修改等于撤销后重建。
+- Trusted publishing takes effect only after the bound workflow actually runs on the repo; until then publishes still need a token. 可信任发布要等被绑定的 workflow 真正运行后才生效，在那之前发布仍需 token。
 
-### Two-factor (OTP)
+## Development 开发
 
-By design, **trust *write* operations require account-level 2FA and cannot be performed
-silently with a token** — a security feature of npm, not a limitation of this tool. `npt`
-prompts for your OTP on the first write, then reuses it for the registry's **~5-minute
-window** so a batch needs only one code. In a non-TTY (CI) context, interactive steps fail
-fast with an actionable message rather than hanging.
+| Path            | Content 内容                                                         |
+| --------------- | -------------------------------------------------------------------- |
+| `src/registry/` | Native npm trust API client 原生 trust API 客户端                    |
+| `src/`          | CLI: wizard, menu, scan / audit / sync CLI 主体                      |
+| `docs/api.md`   | Reverse-engineered npm trust HTTP API 逆向整理的 trust HTTP API 契约 |
+| `test/`         | Vitest suite with a loopback wire-contract test 含回环协议契约测试   |
 
-## Layout
+`npm run build` (tsdown) / `npm test` (Vitest) / `npm run typecheck` / `npm run lint` / `npm run format`.
 
-| Crate | What it is |
-|-------|------------|
-| [`npm-trust`](crates/npm-trust) | Reusable `async` API-client library. No CLI deps. HTTP base URL is injectable for testing. |
-| [`npt`](crates/npt) | The CLI: interactive `wizard` + `scan`/`sync`/`audit`. |
+Setup, conventions, and what CI checks: [CONTRIBUTING.md](CONTRIBUTING.md). Release notes: [CHANGELOG.md](CHANGELOG.md). Reporting a vulnerability: [SECURITY.md](SECURITY.md). Community expectations: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
-The wire protocol is documented — and cited back to npm CLI source (tag `v11.16.0`) — in
-[`docs/api.md`](docs/api.md). The library is covered by `wiremock` protocol tests (CRUD,
-scoped-name escaping, OTP `401 → replay`, rate-limit retry, error-code mapping):
+环境搭建、约定和 CI 检查项见 [CONTRIBUTING.md](CONTRIBUTING.md)，版本变更见 [CHANGELOG.md](CHANGELOG.md)，安全问题上报见 [SECURITY.md](SECURITY.md)，社区行为准则见 [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)。
 
-```sh
-cargo test
-```
+## License 许可
 
-## Publishing these npm packages (maintainers)
+Dual-licensed under either [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE), at your option.
 
-The main package + 6 platform binary packages are published together. Because Trusted
-Publishing (OIDC) can't be configured for a package that doesn't exist yet, the **first**
-release is done locally with your 2FA — one OTP for the whole batch:
-
-```sh
-# 1. Build every platform (push a tag → the release workflow's build job), then pull the
-#    binaries locally:
-gh run download <run-id> -D artifacts        # artifacts/<rust-target>/npt[.exe]
-
-# 2. Assemble + publish all packages. You're prompted ONCE for your OTP; every
-#    `npm publish` reuses it within npm's ~5-minute 2FA window (auto re-prompts if it
-#    expires mid-run):
-node scripts/assemble-npm.mjs --artifacts artifacts --version <x.y.z> --publish
-```
-
-After that first publish, configure Trusted Publishing for each package (use `npt`!) and
-subsequent releases go tokenless via the OIDC `release.yml` workflow — no OTP, no token.
-
-In CI (non-interactive) the same script skips the OTP prompt and relies on OIDC.
-
-## ⚠️ Risks & caveats
-
-- **This is a non-public, reverse-engineered API.** npm can change it without notice; the
-  source-file citations in `docs/api.md` exist so the contract can be re-verified after an
-  npm upgrade.
-- **OTP interaction cannot be removed** for trust writes — the tool only minimizes it to one
-  OTP per session + batch within the window.
-- **A package must exist before binding.** The wizard first-publishes a placeholder;
-  npm/cli#8544 (first-publish-as-OIDC) is still open upstream.
-- **One trust config per package.** Changing a binding is revoke-then-create; the wizard and
-  `sync` do this automatically on drift.
-
-## License
-
-MIT OR Apache-2.0.
+采用 [MIT](LICENSE-MIT) 与 [Apache-2.0](LICENSE-APACHE) 双许可，二者任选其一。

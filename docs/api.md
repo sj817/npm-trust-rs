@@ -8,18 +8,20 @@
 > - **Extraction basis:** `npm/cli` tag **`v11.16.0`** (first `npm trust` GA line is ≥ 11.15.0).
 > - **Registry endpoints are client-version-independent** — the paths live on
 >   `registry.npmjs.org` and do not change with the local npm version. The CLI tag only
->   fixes *which client code* we read the contract from.
+>   fixes _which client code_ we read the contract from.
 > - Relevant HTTP plumbing lives in the bundled dependencies
 >   `npm-registry-fetch@19.1.1` and `npm-profile` (under `node_modules/` of the CLI).
+> - **No npm CLI code is vendored into this project.** The short snippets quoted below are
+>   citations that pin down the wire format; the npm CLI itself is licensed Artistic-2.0.
 
 ---
 
 ## 1. Base URL & path construction
 
-| Item | Value | Source |
-|------|-------|--------|
+| Item             | Value                         | Source                                                |
+| ---------------- | ----------------------------- | ----------------------------------------------------- |
 | Default registry | `https://registry.npmjs.org/` | `npm-registry-fetch/lib/default-opts.js` → `registry` |
-| npm frontend | `https://www.npmjs.com` | `lib/trust-cmd.js` → `NPM_FRONTEND` |
+| npm frontend     | `https://www.npmjs.com`       | `lib/trust-cmd.js` → `NPM_FRONTEND`                   |
 
 Relative URIs passed by the trust commands (e.g. `/-/package/<name>/trust`) are resolved
 against the registry by trimming a trailing slash from the registry and a leading slash
@@ -59,21 +61,21 @@ matching `//registry.npmjs.org/:_authToken`; `npm-registry-fetch/lib/index.js` �
 `getHeaders` (lines 237–241) emits the header:
 
 ```js
-if (auth.token)      headers.authorization = `Bearer ${auth.token}`
-else if (auth.auth)  headers.authorization = `Basic ${auth.auth}`   // legacy _auth
+if (auth.token) headers.authorization = `Bearer ${auth.token}`
+else if (auth.auth) headers.authorization = `Basic ${auth.auth}` // legacy _auth
 ```
 
 Basic auth is also supported (`username` + base64 `_password` → `Basic <base64(user:pass)>`),
-but the standard `~/.npmrc` login writes `_authToken`, so the Rust client uses Bearer.
+but the standard `~/.npmrc` login writes `_authToken`, so the client uses Bearer.
 
-> ⚠️ **Trust write operations require an account-level 2FA token and do *not* accept
+> ⚠️ **Trust write operations require an account-level 2FA token and do _not_ accept
 > Granular Access Tokens.** This is enforced server-side (the write returns a 401/OTP
 > challenge regardless of the token type). The client cannot detect GAT vs automation
 > token from the token string alone; surface the server's 401 message to the user.
 
 ### 2.2 `.npmrc` credential reuse
 
-Priority order the Rust client resolves credentials (mirrors npm's config layering):
+Priority order the client resolves credentials (mirrors npm's config layering):
 
 1. `//registry.npmjs.org/:_authToken=<token>` in `~/.npmrc` (user config) or a
    project/`userconfig`-pointed `.npmrc`.
@@ -83,7 +85,7 @@ Priority order the Rust client resolves credentials (mirrors npm's config layeri
 **Env-var interpolation:** npm expands `${VAR}` references inside `.npmrc` values at load
 time (`@npmcli/config`). A value like `_authToken=${NPM_TOKEN}` must be expanded against
 the process environment before use. Unset `${VAR}` → npm leaves the literal text; the
-Rust client should treat an unresolved `${...}` as "no token".
+client should treat an unresolved `${...}` as "no token".
 
 ### 2.3 Identity check — `GET /-/whoami`
 
@@ -109,10 +111,11 @@ retried with the `npm-otp` header.
 ```js
 const uri = `/-/package/${spec.escapedName}/trust`
 const body = await otplease(npm, flatOptions, opts =>
-  npmFetch.json(uri, { ...opts, method: 'GET' }))
+  npmFetch.json(uri, { ...opts, method: 'GET' }),
+)
 ```
 
-- **Auth:** Bearer. (Reads *can* trigger an OTP challenge because they go through
+- **Auth:** Bearer. (Reads _can_ trigger an OTP challenge because they go through
   `otplease`, but in practice list is readable with just the token.)
 - **Response 200:** JSON. Either a single config object or an **array** of config objects.
   The CLI normalizes with `Array.isArray(body) ? body : [body]`
@@ -126,9 +129,13 @@ const body = await otplease(npm, flatOptions, opts =>
 
 ```js
 const uri = `/-/package/${spec.escapedName}/trust`
-otplease(npm, flatOptions, opts => npmFetch(uri, {
-  ...opts, method: 'POST', body,      // body is JSON-stringified by npm-registry-fetch
-}))
+otplease(npm, flatOptions, opts =>
+  npmFetch(uri, {
+    ...opts,
+    method: 'POST',
+    body, // body is JSON-stringified by npm-registry-fetch
+  }),
+)
 ```
 
 - **Body:** a **JSON array with a single trust-config object** (`createConfigCommand`
@@ -141,7 +148,7 @@ otplease(npm, flatOptions, opts => npmFetch(uri, {
 - **Preconditions enforced by registry, not the client:**
   - **The package must already exist.** There is no create-package-on-trust path
     (npm/cli#8544 still open). New packages must be published first (token-based publish is
-    fine), *then* bound.
+    fine), _then_ bound.
   - **One trust config per package.** Changing a binding = revoke old id + create new.
   - **Since 2026-05-20, at least one allowed action is required** (see §4.4). The client
     mirrors this: `createConfigCommand` throws locally if neither `--allow-publish` nor
@@ -170,10 +177,10 @@ The config object is built by each provider's `optionsToBody` and parsed back by
 
 ```jsonc
 {
-  "id":   "<server-assigned>",   // present in responses, absent in create requests
+  "id": "<server-assigned>", // present in responses, absent in create requests
   "type": "github | gitlab | circleci",
-  "claims": { /* provider-specific, see below */ },
-  "permissions": ["createPackage", "createStagedPackage"]   // see §4.4
+  "claims": {/* provider-specific, see below */},
+  "permissions": ["createPackage", "createStagedPackage"], // see §4.4
 }
 ```
 
@@ -188,11 +195,11 @@ Source: `lib/commands/trust/github.js` → `optionsToBody` (70–83) / `bodyToOp
 {
   "type": "github",
   "claims": {
-    "repository": "owner/repo",          // required, validated as exactly 2 "/"-parts
-    "workflow_ref": { "file": "publish.yml" },  // basename only, must end .yml/.yaml
-    "environment": "production"          // OPTIONAL (omitted if unset)
+    "repository": "owner/repo", // required, validated as exactly 2 "/"-parts
+    "workflow_ref": { "file": "publish.yml" }, // basename only, must end .yml/.yaml
+    "environment": "production", // OPTIONAL (omitted if unset)
   },
-  "permissions": ["createPackage"]
+  "permissions": ["createPackage"],
 }
 ```
 
@@ -208,11 +215,11 @@ Source: `lib/commands/trust/gitlab.js` → `optionsToBody` (69–84) / `bodyToOp
 {
   "type": "gitlab",
   "claims": {
-    "project_path": "group/project",           // or group/subgroup/project (>= 2 parts)
-    "ci_config_ref_uri": { "file": ".gitlab-ci.yml" },  // basename only, .yml/.yaml
-    "environment": "production"                 // OPTIONAL
+    "project_path": "group/project", // or group/subgroup/project (>= 2 parts)
+    "ci_config_ref_uri": { "file": ".gitlab-ci.yml" }, // basename only, .yml/.yaml
+    "environment": "production", // OPTIONAL
   },
-  "permissions": ["createPackage"]
+  "permissions": ["createPackage"],
 }
 ```
 
@@ -228,13 +235,13 @@ Source: `lib/commands/trust/circleci.js` → `optionsToBody` (81–96) / `bodyTo
 {
   "type": "circleci",
   "claims": {
-    "oidc.circleci.com/org-id":                "<uuid>",
-    "oidc.circleci.com/project-id":            "<uuid>",
-    "oidc.circleci.com/pipeline-definition-id":"<uuid>",
-    "oidc.circleci.com/vcs-origin":            "github.com/owner/repo",  // provider/owner/repo, no scheme
-    "oidc.circleci.com/context-ids":           ["<uuid>", "..."]         // OPTIONAL, only if non-empty
+    "oidc.circleci.com/org-id": "<uuid>",
+    "oidc.circleci.com/project-id": "<uuid>",
+    "oidc.circleci.com/pipeline-definition-id": "<uuid>",
+    "oidc.circleci.com/vcs-origin": "github.com/owner/repo", // provider/owner/repo, no scheme
+    "oidc.circleci.com/context-ids": ["<uuid>", "..."], // OPTIONAL, only if non-empty
   },
-  "permissions": ["createPackage"]
+  "permissions": ["createPackage"],
 }
 ```
 
@@ -248,14 +255,14 @@ Source: `lib/commands/trust/circleci.js` → `optionsToBody` (81–96) / `bodyTo
 
 Source: `lib/commands/trust/index.js:13–16` (`PERMISSIONS`), `lib/trust-cmd.js:206–239`.
 
-| CLI flag | Permission string in `permissions[]` | Display label |
-|----------|---------------------------------------|---------------|
-| `--allow-publish` | `createPackage` | `publish` |
-| `--allow-stage-publish` (alias `--allow-staged-publish`) | `createStagedPackage` | `stage publish` |
+| CLI flag                                                 | Permission string in `permissions[]` | Display label   |
+| -------------------------------------------------------- | ------------------------------------ | --------------- |
+| `--allow-publish`                                        | `createPackage`                      | `publish`       |
+| `--allow-stage-publish` (alias `--allow-staged-publish`) | `createStagedPackage`                | `stage publish` |
 
 - `permissions` is an **array** built in `createConfigCommand` (lines 218–224, 238–239).
 - **At least one is mandatory** — the client throws `At least one permission flag is
-  required` if both are false (`trust-cmd.js:214–216`); the registry likewise rejects
+required` if both are false (`trust-cmd.js:214–216`); the registry likewise rejects
   configs created after 2026-05-20 with no allowed action.
 
 ---
@@ -274,11 +281,11 @@ Source: `npm-registry-fetch/lib/check-response.js` → `checkErrors` (65–107).
 A `401` is classified by the **`www-authenticate`** response header (comma-split,
 lowercased):
 
-| `www-authenticate` contains | Error code | Meaning |
-|-----------------------------|-----------|---------|
-| `otp` | `EOTP` | One-time password required |
-| `ipaddress` | `EAUTHIP` | Login blocked from this IP |
-| (other) | `HttpErrorAuthUnknown` | Unknown auth requirement |
+| `www-authenticate` contains | Error code             | Meaning                    |
+| --------------------------- | ---------------------- | -------------------------- |
+| `otp`                       | `EOTP`                 | One-time password required |
+| `ipaddress`                 | `EAUTHIP`              | Login blocked from this IP |
+| (other)                     | `HttpErrorAuthUnknown` | Unknown auth requirement   |
 
 **Heuristic fallback:** a `401` whose body text matches `/one-time pass/` is also treated as
 an OTP challenge even without the header (`check-response.js:92–101`).
@@ -299,7 +306,7 @@ Source for the header: `npm-registry-fetch/lib/index.js` → `getHeaders` (243�
 `if (opts.otp) headers['npm-otp'] = opts.otp`.
 
 > If stdin/stdout is not a TTY, `otplease` rethrows instead of prompting
-> (`auth.js:10–12`). The Rust CLI must do the same for CI-safe behavior.
+> (`auth.js:10–12`). The CLI must do the same for CI-safe behavior.
 
 ### 5.3 Web OTP (browser second factor)
 
@@ -337,11 +344,11 @@ Body: {}                  (empty object on first attempt)
 
 Source: `webAuthCheckLogin` (106–128).
 
-| Status | Action |
-|--------|--------|
-| `200` | Body `{ "token": "<authToken>" }` → done. Missing token ⇒ invalid response. |
-| `202` | Not ready. Honor **`Retry-After`** header (seconds) and poll again. |
-| other | `WebLoginInvalidResponse`. |
+| Status | Action                                                                      |
+| ------ | --------------------------------------------------------------------------- |
+| `200`  | Body `{ "token": "<authToken>" }` → done. Missing token ⇒ invalid response. |
+| `202`  | Not ready. Honor **`Retry-After`** header (seconds) and poll again.         |
+| other  | `WebLoginInvalidResponse`.                                                  |
 
 The returned `token` is a normal registry `_authToken` and can be written to `.npmrc` and
 reused per §2.
@@ -352,18 +359,18 @@ reused per §2.
 
 Source: `npm-registry-fetch/lib/index.js` → `getHeaders` (214–248).
 
-| Header | When sent | Notes / Rust client behavior |
-|--------|-----------|------------------------------|
-| `authorization: Bearer <token>` | when a token is resolved | primary auth |
-| `user-agent` | always | npm default format `npm/<ver> node/<ver> <platform> <arch>`; the Rust client sends a plausible npm-style UA. Default-opts fallback: `npm-registry-fetch@<ver>/node@<ver>+<arch> (<platform>)` (`default-opts.js:9–18`). |
-| `content-type: application/json` | non-string object bodies | set automatically for POST create |
-| `npm-otp: <otp>` | OTP replay only | §5.2 |
-| `npm-command: <name>` | when `opts.npmCommand` set | npm sends the command name; **not known to be required** for trust endpoints. Record here so the Rust client can send `npm-command: trust` if a 4xx suggests gating. |
-| `npm-scope`, `npm-session`, `npm-auth-type` | when set in opts | telemetry/session; not required. |
+| Header                                      | When sent                  | Notes / client behavior                                                                                                                                                                                            |
+| ------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `authorization: Bearer <token>`             | when a token is resolved   | primary auth                                                                                                                                                                                                       |
+| `user-agent`                                | always                     | npm default format `npm/<ver> node/<ver> <platform> <arch>`; the client sends a plausible npm-style UA. Default-opts fallback: `npm-registry-fetch@<ver>/node@<ver>+<arch> (<platform>)` (`default-opts.js:9–18`). |
+| `content-type: application/json`            | non-string object bodies   | set automatically for POST create                                                                                                                                                                                  |
+| `npm-otp: <otp>`                            | OTP replay only            | §5.2                                                                                                                                                                                                               |
+| `npm-command: <name>`                       | when `opts.npmCommand` set | npm sends the command name; **not known to be required** for trust endpoints. Record here so the client can send `npm-command: trust` if a 4xx suggests gating.                                                    |
+| `npm-scope`, `npm-session`, `npm-auth-type` | when set in opts           | telemetry/session; not required.                                                                                                                                                                                   |
 
 > **Validation TODO (real registry):** confirm whether `registry.npmjs.org` gates the
 > trust endpoints on any of `user-agent` / `npm-command`. If a request without them returns
-> 4xx, document the exact requirement here and have the Rust client mock it.
+> 4xx, document the exact requirement here and have the client mock it.
 
 ---
 
@@ -373,16 +380,16 @@ Source: `npm-registry-fetch/lib/index.js` → `getHeaders` (214–248).
 `HttpErrorBase.code = 'E' + res.status`). Body is JSON-parsed when possible; `body.error`
 carries the human message (`HttpErrorGeneral`).
 
-| Status | `code` | Trust-context meaning | User-facing next step |
-|--------|--------|------------------------|-----------------------|
-| `401` (`www-authenticate: otp` or body `one-time pass`) | `EOTP` | 2FA required / window expired | Prompt for OTP, replay (§5). |
-| `401` (`www-authenticate: ipaddress`) | `EAUTHIP` | IP not allowed | Tell user their IP is blocked. |
-| `401` (other) | `E401` / `HttpErrorAuthUnknown` | Bad/expired token, or GAT used for a write | "Token invalid or lacks 2FA — run `npm login` / use an account 2FA token." |
-| `403` | `E403` | Not an owner/maintainer of the package | "You lack publish rights on `<pkg>`." |
-| `404` | `E404` | Package (or trust id) not found | Package must be published first; for revoke, the id no longer exists. |
-| `409` | `E409` | Conflict — a trust config already exists | "Package already has a trust config; revoke it first (reconcile = revoke + create)." |
-| `429` | `E429` | Rate limited | Back off; honor `Retry-After` if present. Space trust writes ~2s apart (npm guidance). |
-| `5xx` | `E5xx` | Registry error | Retry with backoff. |
+| Status                                                  | `code`                          | Trust-context meaning                      | User-facing next step                                                                  |
+| ------------------------------------------------------- | ------------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `401` (`www-authenticate: otp` or body `one-time pass`) | `EOTP`                          | 2FA required / window expired              | Prompt for OTP, replay (§5).                                                           |
+| `401` (`www-authenticate: ipaddress`)                   | `EAUTHIP`                       | IP not allowed                             | Tell user their IP is blocked.                                                         |
+| `401` (other)                                           | `E401` / `HttpErrorAuthUnknown` | Bad/expired token, or GAT used for a write | "Token invalid or lacks 2FA — run `npm login` / use an account 2FA token."             |
+| `403`                                                   | `E403`                          | Not an owner/maintainer of the package     | "You lack publish rights on `<pkg>`."                                                  |
+| `404`                                                   | `E404`                          | Package (or trust id) not found            | Package must be published first; for revoke, the id no longer exists.                  |
+| `409`                                                   | `E409`                          | Conflict — a trust config already exists   | "Package already has a trust config; revoke it first (reconcile = revoke + create)."   |
+| `429`                                                   | `E429`                          | Rate limited                               | Back off; honor `Retry-After` if present. Space trust writes ~2s apart (npm guidance). |
+| `5xx`                                                   | `E5xx`                          | Registry error                             | Retry with backoff.                                                                    |
 
 > **Exact 4xx bodies for "already exists" / "package not found" / "insufficient
 > permission" are not fully pinned from source** (they originate server-side). §Validation
@@ -390,12 +397,12 @@ carries the human message (`HttpErrorGeneral`).
 > this table.
 
 `npm-registry-fetch` also retries transient failures automatically
-(`fetchRetries`/`fetchRetryFactor`, index.js:125–130) — the Rust client implements
+(`fetchRetries`/`fetchRetryFactor`, index.js:125–130) — the client implements
 equivalent exponential-backoff retry on `429`/`5xx`/network errors.
 
 ---
 
-## 9. Client behavior checklist (for the Rust implementation)
+## 9. Client behavior checklist (for the TS implementation)
 
 - [ ] Resolve token: `.npmrc` `//registry.npmjs.org/:_authToken` (with `${VAR}` expansion) → `NPM_TOKEN` → prompt.
 - [ ] Escape package name via `name.replace('/', '%2f')` (first slash only).
@@ -418,22 +425,23 @@ required. (Not part of `npm trust`; documented in the project brief and used by 
 
 ## 10. Source-file index (tag v11.16.0)
 
-| Concern | File · symbol |
-|---------|---------------|
-| Subcommand registry | `lib/commands/trust/index.js` · `Trust.subcommands` |
-| Shared command base, create/list helpers | `lib/trust-cmd.js` · `TrustCommand` (`createConfig`, `createConfigCommand`, `displayResponseBody`) |
-| Permissions map | `lib/commands/trust/index.js` · `PERMISSIONS` |
-| GitHub body/parse | `lib/commands/trust/github.js` · `optionsToBody`/`bodyToOptions` |
-| GitLab body/parse | `lib/commands/trust/gitlab.js` · `optionsToBody`/`bodyToOptions` |
-| CircleCI body/parse | `lib/commands/trust/circleci.js` · `optionsToBody`/`bodyToOptions` |
-| List (GET) | `lib/commands/trust/list.js` · `exec` |
-| Revoke (DELETE) | `lib/commands/trust/revoke.js` · `exec` |
-| OTP orchestration | `lib/utils/auth.js` · `otplease` |
-| Identity / whoami | `lib/utils/get-identity.js` |
-| HTTP: headers, auth header, otp header | `npm-registry-fetch/lib/index.js` · `regFetch`/`getHeaders` |
-| HTTP: token resolution from config | `npm-registry-fetch/lib/auth.js` · `getAuth` |
-| HTTP: 401/OTP classification, error mapping | `npm-registry-fetch/lib/check-response.js`, `errors.js` |
-| Default registry / user-agent | `npm-registry-fetch/lib/default-opts.js` |
-| Web login initiate/poll | `npm-profile/lib/index.js` · `webAuth`/`webAuthCheckLogin` |
-| Name escaping | `npm-package-arg/lib/npa.js` · `escapedName` |
+| Concern                                     | File · symbol                                                                                      |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Subcommand registry                         | `lib/commands/trust/index.js` · `Trust.subcommands`                                                |
+| Shared command base, create/list helpers    | `lib/trust-cmd.js` · `TrustCommand` (`createConfig`, `createConfigCommand`, `displayResponseBody`) |
+| Permissions map                             | `lib/commands/trust/index.js` · `PERMISSIONS`                                                      |
+| GitHub body/parse                           | `lib/commands/trust/github.js` · `optionsToBody`/`bodyToOptions`                                   |
+| GitLab body/parse                           | `lib/commands/trust/gitlab.js` · `optionsToBody`/`bodyToOptions`                                   |
+| CircleCI body/parse                         | `lib/commands/trust/circleci.js` · `optionsToBody`/`bodyToOptions`                                 |
+| List (GET)                                  | `lib/commands/trust/list.js` · `exec`                                                              |
+| Revoke (DELETE)                             | `lib/commands/trust/revoke.js` · `exec`                                                            |
+| OTP orchestration                           | `lib/utils/auth.js` · `otplease`                                                                   |
+| Identity / whoami                           | `lib/utils/get-identity.js`                                                                        |
+| HTTP: headers, auth header, otp header      | `npm-registry-fetch/lib/index.js` · `regFetch`/`getHeaders`                                        |
+| HTTP: token resolution from config          | `npm-registry-fetch/lib/auth.js` · `getAuth`                                                       |
+| HTTP: 401/OTP classification, error mapping | `npm-registry-fetch/lib/check-response.js`, `errors.js`                                            |
+| Default registry / user-agent               | `npm-registry-fetch/lib/default-opts.js`                                                           |
+| Web login initiate/poll                     | `npm-profile/lib/index.js` · `webAuth`/`webAuthCheckLogin`                                         |
+| Name escaping                               | `npm-package-arg/lib/npa.js` · `escapedName`                                                       |
+
 </content>

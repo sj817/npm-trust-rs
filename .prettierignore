@@ -1,0 +1,7 @@
+# 依赖 / 锁文件
+node_modules
+package-lock.json
+
+# 构建产物
+dist
+coverage
