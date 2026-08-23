@@ -18,6 +18,7 @@ First public release. An earlier Rust implementation lived in this repository (p
 - Interactive menu covering status, wizard, bind / revoke, CI template, and batch setup. 交互式菜单，覆盖状态查看、向导、绑定与撤销、CI 模板生成和批量配置。
 - `npt init` / `scan` / `audit` / `sync` subcommands, with `audit` exiting non-zero on drift for CI use. `npt init` / `scan` / `audit` / `sync` 四个子命令，其中 `audit` 检测到漂移时以非零码退出，便于接入 CI。
 - Batch setup: scan a directory, multi-select packages, and reuse a single OTP across the run. 批量配置：扫描目录后多选包，整批复用一次 OTP。
+- First-publish asks for the OTP up front and passes `--otp` to `npm publish`, so 2FA stays in the terminal instead of opening a browser; the same code is reused for the trust write that follows. 首发前先问 OTP 并以 `--otp` 传给 `npm publish`，2FA 全程留在终端而不打开浏览器，随后的信任写操作复用同一个验证码。
 - Bilingual UI (English / 中文), auto-detected from the locale, overridable with `NPT_LANG`. 中英双语界面，按系统语言自动切换，可用 `NPT_LANG` 指定。
 - `docs/api.md` — the reverse-engineered npm trust HTTP API contract, with source citations. `docs/api.md`：逆向整理的 npm trust HTTP API 契约，附源码出处。
 

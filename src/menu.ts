@@ -8,7 +8,13 @@ import { runScan } from './commands/scan'
 import { runAudit } from './commands/audit'
 import { discoverLocal, validateOwnerRepo } from './discover'
 import { githubTrust, Permission, sameBinding } from './registry/index'
-import { defaultWizardArgs, ensureWorkflowFile, publishPlaceholder, runWizard } from './wizard'
+import {
+  defaultWizardArgs,
+  ensureWorkflowFile,
+  promptPublishOtp,
+  publishPlaceholder,
+  runWizard,
+} from './wizard'
 import {
   bindingRepo,
   DEFAULT_WORKFLOW,
@@ -447,7 +453,7 @@ async function publishAction(
     return
   }
   if (await confirm(t('Publish a minimal placeholder version now?', '现在发布最小占位版本吗?'))) {
-    publishPlaceholder(name)
+    publishPlaceholder(name, await promptPublishOtp())
     await refresh(client, name, snap)
   }
 }

@@ -12,7 +12,7 @@ import { repoExists } from './github'
 import { errMsg } from './commands/util'
 import { validateOwnerRepo } from './discover'
 import { githubPublishWorkflow } from './templates'
-import { confirm, promptValidated } from './prompts'
+import { confirm, promptOtpOptional, promptValidated } from './prompts'
 import { DEFAULT_REGISTRY, githubTrust, Permission } from './registry/index'
 import {
   bindingRepo,
@@ -46,6 +46,26 @@ export function ensureWorkflowFile(dir: string, workflow: string): void {
   writeFileSync(wfPath, githubPublishWorkflow())
   console.log(
     color.ok(t(`✓ created workflow template: ${wfPath}`, `✓ 已创建 workflow 模板:${wfPath}`)),
+  )
+}
+
+/**
+ * Ask for the OTP `npm publish` will need, before the publish runs.
+ *
+ * npm picks its 2FA path from the registry's EOTP response (npm `lib/utils/auth.js`
+ * → `otplease`): when the body carries `authUrl`/`doneUrl` — which registry.npmjs.org
+ * always does — it opens a browser, and no npm config switches that off. Supplying
+ * `--otp` up front means the challenge never happens, so the flow stays in the
+ * terminal. A blank answer keeps npm's own behaviour, for accounts that do not need
+ * an OTP to publish; a non-TTY skips the prompt entirely, matching npm's own guard.
+ */
+export function promptPublishOtp(): Promise<string | undefined> {
+  if (!(process.stdin.isTTY && process.stdout.isTTY)) return Promise.resolve(undefined)
+  return promptOtpOptional(
+    t(
+      'OTP for npm publish (blank: let npm handle 2FA, which opens a browser)',
+      'npm publish 用的 OTP(留空则交给 npm 处理 2FA,会打开浏览器)',
+    ),
   )
 }
 
@@ -226,7 +246,10 @@ export async function runWizard(args: WizardArgs): Promise<void> {
       )
       return
     }
-    publishPlaceholder(name)
+    const otp = await promptPublishOtp()
+    publishPlaceholder(name, otp)
+    // The trust write below lands inside the same ~5-minute 2FA window.
+    if (otp) writer.setOtp(otp)
   }
 
   const desiredDesc = describeBinding(desired)

@@ -8,8 +8,8 @@ import { spawnSync } from 'node:child_process'
 import { t } from '../i18n'
 import { confirm } from '../prompts'
 import { discoverAll, sleep } from './util'
-import { publishPlaceholder } from '../wizard'
 import { DEFAULT_REGISTRY } from '../registry/index'
+import { promptPublishOtp, publishPlaceholder } from '../wizard'
 import { assess, describeBinding, npmCommand, resolveClient, Writer } from '../engine'
 
 import type { PackagePlan } from '../engine'
@@ -110,6 +110,7 @@ async function executeAction(
   a: Action,
   writer: Writer,
   spaceWrites: () => Promise<void>,
+  publishOtp: () => Promise<string | undefined>,
 ): Promise<void> {
   switch (a.kind) {
     case 'create': {
@@ -124,7 +125,7 @@ async function executeAction(
       break
     }
     case 'publish': {
-      publish(a.name, a.dir, a.placeholder)
+      publish(a.name, a.dir, a.placeholder, await publishOtp())
       break
     }
     case 'reconcile': {
@@ -170,8 +171,21 @@ async function executeActions(actions: Action[], writer: Writer): Promise<void> 
     await sleep(WRITE_SPACING_MS)
   }
 
+  // Asked at most once, and only if a publish is actually reached: one OTP covers
+  // the publishes and the trust writes that follow, inside the same ~5-min window.
+  let otp: string | undefined
+  let asked = false
+  const publishOtp = async (): Promise<string | undefined> => {
+    if (!asked) {
+      asked = true
+      otp = await promptPublishOtp()
+      if (otp) writer.setOtp(otp)
+    }
+    return otp
+  }
+
   for (const a of actions) {
-    await executeAction(a, writer, spaceWrites)
+    await executeAction(a, writer, spaceWrites, publishOtp)
   }
 }
 
@@ -220,9 +234,9 @@ function planActions(p: PackagePlan, pkg: DiscoveredPackage | undefined, args: S
  * from a temp dir (works even for gh-only sources with no local checkout);
  * otherwise runs `npm publish` in the package's real directory.
  */
-function publish(name: string, dir: string | undefined, placeholder: boolean): void {
+function publish(name: string, dir: string | undefined, placeholder: boolean, otp?: string): void {
   if (placeholder) {
-    publishPlaceholder(name)
+    publishPlaceholder(name, otp)
     return
   }
   if (!dir) {
@@ -244,6 +258,8 @@ function publish(name: string, dir: string | undefined, placeholder: boolean): v
   const publishArgs = [...prefix, 'publish', '--registry', DEFAULT_REGISTRY]
   // Scoped packages default to restricted on first publish.
   if (name.startsWith('@')) publishArgs.push('--access', 'public')
+  // Supplied up front so npm never issues its browser-based 2FA challenge.
+  if (otp) publishArgs.push(`--otp=${otp}`)
   const res = spawnSync(cmd, publishArgs, { cwd: dir, stdio: 'inherit' })
   if (res.status !== 0) throw new Error(`npm publish failed for ${name}`)
 }
