@@ -1,0 +1,26 @@
+name: Feature request 功能建议
+description: Propose a change to what npt does 提出功能层面的改动
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem 要解决的问题
+      description: What is hard or impossible today 目前哪一步做不了或很麻烦
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal 设想的做法
+      description: The command, flag, or flow being suggested 建议的命令、参数或流程
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered 考虑过的其他做法
+    validations:
+      required: false

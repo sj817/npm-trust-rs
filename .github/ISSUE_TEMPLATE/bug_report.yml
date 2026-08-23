@@ -1,0 +1,66 @@
+name: Bug report 缺陷报告
+description: Something in npt behaves differently than documented 行为与文档不符
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste npm tokens, OTP codes, or `.npmrc` contents — redact them before submitting.
+
+        请不要粘贴 npm token、OTP 验证码或 `.npmrc` 内容，提交前先打码。
+
+        For a security vulnerability, use [private reporting](https://github.com/sj817/npm-trust/security/advisories/new) instead of this form.
+
+        安全漏洞请走[私密上报](https://github.com/sj817/npm-trust/security/advisories/new)，不要用本表单。
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened 实际结果
+      description: Include the exact command and the output 附上执行的命令和输出
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What was expected 预期结果
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce 复现步骤
+      description: A minimal `package.json` or directory layout helps 最小的 `package.json` 或目录结构会很有帮助
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: npt version 版本
+      description: Output of `npt --version` 或 `npx @qwqo/npm-trust --version`
+      placeholder: 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Node.js and OS 运行环境
+      description: Output of `node -v`, plus the operating system
+      placeholder: v22.11.0 / Windows 11
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks 确认项
+      options:
+        - label: The output above contains no token, OTP, or other credential 上面的输出中不含 token、OTP 或其他凭据
+          required: true
+        - label: Reproduced on the latest published version 已在最新版本上复现
+          required: false

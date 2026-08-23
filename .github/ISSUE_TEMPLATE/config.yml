@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability 安全漏洞
+    url: https://github.com/sj817/npm-trust/security/advisories/new
+    about: Report privately, not through a public issue 请私下上报，不要用公开 issue
+  - name: npm Trusted Publishing docs npm 官方文档
+    url: https://docs.npmjs.com/trusted-publishers
+    about: Questions about npm's own OIDC behavior 关于 npm 自身 OIDC 行为的问题
