@@ -8,9 +8,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [0.1.0]
 
-First release as a TypeScript package. The tool was previously distributed as `npt` (a Rust binary wrapped in an npm package, up to `0.0.3`) and has been rewritten from scratch; the new package name is `@qwqo/npm-trust` and the versioning restarts.
+First public release. An earlier Rust implementation lived in this repository (planned for npm as `@qwqojs/npt`, wrapping platform binaries) but was never published; it has been rewritten from scratch in TypeScript and ships as `@qwqo/npm-trust`.
 
-首个 TypeScript 版本。此前以 `npt` 的名义分发（npm 包装的 Rust 二进制，最高 `0.0.3`），本版本为完全重写，包名改为 `@qwqo/npm-trust`，版本号重新计数。
+首个公开版本。仓库中曾有一版 Rust 实现（计划以 `@qwqojs/npt` 分发，包装多平台二进制），但从未发布到 npm；本版本为 TypeScript 完全重写，以 `@qwqo/npm-trust` 发布。
 
 ### Added 新增
 
