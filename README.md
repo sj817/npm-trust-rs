@@ -43,6 +43,31 @@ GitHub scanning (`--org`) and repo checks use the anonymous GitHub REST API. Set
 
 GitHub 扫描（`--org`）与仓库检查走匿名 GitHub REST API。设置 `GITHUB_TOKEN`（或 `GH_TOKEN`）可提高限额并访问私有仓库。
 
+## Relation to `npm trust` 与内置 `npm trust` 的关系
+
+npm 11.15 ships a built-in `npm trust` (`github` / `gitlab` / `circleci` / `list` / `revoke`). It covers one package at a time, from explicit flags. If that is all that is needed, use it — it is the official client and `npt` talks to the same endpoints.
+
+npm 11.15 起内置了 `npm trust`（`github` / `gitlab` / `circleci` / `list` / `revoke`），按显式参数一次处理一个包。如果需求就到这里，直接用它即可——那是官方客户端，`npt` 调用的也是同一批接口。
+
+`npt` adds the parts around it:
+
+`npt` 补的是它周围的部分：
+
+|                                                                                          | `npm trust` | `npt`                     |
+| ---------------------------------------------------------------------------------------- | ----------- | ------------------------- |
+| Derive the binding from `package.json` 从 `package.json` 推导绑定                        | —           | ✓                         |
+| Scaffold the CI workflow 生成 CI workflow                                                | —           | ✓                         |
+| First-publish a placeholder for an unused name 为未占用的包名首发占位                    | —           | ✓                         |
+| Drift detection across many packages, non-zero exit for CI 多包漂移检查，CI 可用的退出码 | —           | `scan` / `audit` / `sync` |
+| One OTP across a whole batch 整批复用一次 OTP                                            | —           | ✓                         |
+| Keep 2FA in the terminal on publish 发布时 2FA 留在终端                                  | —           | ✓                         |
+| Requires a recent npm 对 npm 版本有要求                                                  | >= 11.15    | any 任意版本              |
+| Usable as a library 可作为库调用                                                         | —           | `exports["."]`            |
+
+The trust HTTP contract `npt` implements is byte-identical between npm 11.16.0 and 12.0.2 — every file under `lib/commands/trust/` has the same SHA at both tags. See `docs/api.md`.
+
+`npt` 实现的 trust HTTP 契约在 npm 11.16.0 与 12.0.2 之间完全一致——`lib/commands/trust/` 下每个文件在两个 tag 上的 SHA 都相同，详见 `docs/api.md`。
+
 ## Authentication 认证
 
 `npt` reuses existing npm credentials — the `//registry.npmjs.org/:_authToken` line in the user `.npmrc` (`${VAR}` is expanded), or the `NPM_TOKEN` environment variable. Trust writes require account-level 2FA: `npt` prompts for an OTP when the registry challenges and reuses it across a batch. Read-only `scan` / `audit` never prompt.
