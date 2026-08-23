@@ -24,4 +24,9 @@ First public release. An earlier Rust implementation lived in this repository (p
 
 ### Changed 变更
 
+- Releases are triggered by pushing a `v*` tag. The job refuses to publish unless the tag matches `package.json`, and creates the GitHub Release itself after a successful publish. 发版改为推送 `v*` tag 触发；tag 与 `package.json` 版本不一致时拒绝发布，发布成功后自动创建 GitHub Release。
+- `package-lock.json` resolves everything to `registry.npmjs.org`; a mirror's URLs had been baked in, which npm >= 12 refuses to install (`EALLOWREMOTE`). `scripts/check-lockfile.mjs` guards it in CI. `package-lock.json` 全部解析到 `registry.npmjs.org`；此前混入了镜像地址，npm 12 及以上会拒绝安装（`EALLOWREMOTE`），现由 `scripts/check-lockfile.mjs` 在 CI 中把关。
+- `allowScripts` records `unrs-resolver` as denied: npm >= 12 blocks dependency install scripts by default, and that postinstall only repairs a napi binary `optionalDependencies` already installs. `allowScripts` 中将 `unrs-resolver` 记为拒绝：npm 12 起默认拦截依赖安装脚本，而它的 postinstall 只是补装 `optionalDependencies` 本就装好的 napi 二进制。
+- `.gitattributes` checks out LF everywhere, so `prettier --check` no longer fails on Windows clones. `.gitattributes` 统一以 LF 签出，Windows 上克隆后 `prettier --check` 不再失败。
+
 - Distribution no longer ships platform binaries. The package is pure ESM and runs on Node.js >= 18. 不再分发平台二进制，改为纯 ESM 包，要求 Node.js 18 及以上。

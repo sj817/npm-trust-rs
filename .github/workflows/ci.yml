@@ -70,6 +70,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Lockfile hygiene
+        run: node scripts/check-lockfile.mjs
+
       - run: npm ci
       - run: npx eslint .
       - run: npx prettier --check .

@@ -1,2 +1,9 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Normalize to LF in the repository, and check out LF everywhere — including on
+# Windows, where core.autocrlf=true would otherwise hand contributors CRLF files
+# that `prettier --check` rejects.
+* text=auto eol=lf
+
+# Keep these byte-exact.
+*.png binary
+*.jpg binary
+*.ico binary

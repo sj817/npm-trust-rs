@@ -6,6 +6,9 @@
 > extracted from so it can be re-verified when npm upgrades.
 >
 > - **Extraction basis:** `npm/cli` tag **`v11.16.0`** (first `npm trust` GA line is ≥ 11.15.0).
+> - **Re-verified against `v12.0.2`** (2026-08-23): every file under `lib/commands/trust/`
+>   has an identical blob SHA at both tags, and `lib/trust-cmd.js` differs only by a comment
+>   typo fix. npm 12's breaking changes do not touch this contract.
 > - **Registry endpoints are client-version-independent** — the paths live on
 >   `registry.npmjs.org` and do not change with the local npm version. The CLI tag only
 >   fixes _which client code_ we read the contract from.

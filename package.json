@@ -44,11 +44,15 @@
   "publishConfig": {
     "access": "public"
   },
+  "allowScripts": {
+    "unrs-resolver": false
+  },
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "lint:lockfile": "node scripts/check-lockfile.mjs",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

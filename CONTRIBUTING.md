@@ -34,6 +34,16 @@ npm run format:check  # prettier --check .
 
 `npm run lint:fix` 与 `npm run format` 会自动修复可修复的问题。
 
+## Lockfile 锁文件
+
+`package-lock.json` must resolve every package to `registry.npmjs.org`; CI fails otherwise. Installing behind a mirror bakes that mirror's URLs into every `resolved` entry — npm >= 12 then refuses to install the tree (`EALLOWREMOTE`), and no one else opted into that host. A mirror is fine for a plain `npm install --registry <mirror>`, but regenerate the lockfile against npmjs before committing it.
+
+`package-lock.json` 中每一项都必须解析到 `registry.npmjs.org`，否则 CI 不通过。挂着镜像安装会把镜像地址写进每一条 `resolved`，npm 12 及以上会直接拒绝安装（`EALLOWREMOTE`），而且别人并没有选择那个源。日常用 `npm install --registry <镜像>` 加速没问题，但提交前要用 npmjs 重新生成锁文件。
+
+Dependency install scripts are blocked by default from npm 12 on. The one package in this tree that has one — `unrs-resolver`, a transitive dev dependency — is recorded as denied in the `allowScripts` field: its postinstall only repairs a missing napi binary that `optionalDependencies` already installs correctly, so it is not needed. Do not approve it without a reason.
+
+从 npm 12 起，依赖的安装脚本默认被拦截。本项目依赖树中唯一带安装脚本的 `unrs-resolver`（传递而来的开发依赖）在 `allowScripts` 中记为拒绝：它的 postinstall 只是在 napi 二进制缺失时补装，而 `optionalDependencies` 本来就装好了，因此不需要放行。没有理由不要批准它。
+
 ## Layout 目录结构
 
 | Path            | Content 内容                                                        |
