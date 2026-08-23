@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        node: [18, 22]
+        node: [22, 24]
     steps:
       - uses: actions/checkout@v4
 
@@ -27,6 +27,39 @@ jobs:
       - run: npm run typecheck
       - run: npm run build
       - run: npm test
+
+  # The dev toolchain needs Node >= 22 (vitest, tsdown), but the bundle targets
+  # node18 and the runtime deps support it. Build on a modern Node, then check the
+  # packed artifact actually installs and starts on the oldest Node `engines` promises.
+  engines:
+    name: engines (Node 18 artifact)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - run: npm ci
+      - run: npm run build
+      - run: npm pack --pack-destination "$RUNNER_TEMP"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install the tarball on Node 18 and run it
+        run: |
+          mkdir -p "$RUNNER_TEMP/smoke"
+          cd "$RUNNER_TEMP/smoke"
+          npm init -y > /dev/null
+          npm install --no-audit --no-fund "$RUNNER_TEMP"/qwqo-npm-trust-*.tgz
+          ./node_modules/.bin/npt --version
+          node --input-type=module -e "
+            const m = await import('@qwqo/npm-trust')
+            if (typeof m.githubTrust !== 'function') throw new Error('missing library export')
+          "
 
   lint:
     runs-on: ubuntu-latest
