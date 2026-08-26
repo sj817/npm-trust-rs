@@ -20,6 +20,7 @@ import {
   describeBinding,
   npmCommand,
   resolveClient,
+  validateWorkflowFile,
   Writer,
 } from './engine'
 
@@ -347,17 +348,11 @@ function printNextSteps(ownerRepo: string, workflow: string): void {
 }
 
 function promptWorkflow(dflt: string): Promise<string> {
-  return promptValidated(t('CI workflow filename', 'CI workflow 文件名'), dflt, s => {
-    if (!(s.endsWith('.yml') || s.endsWith('.yaml'))) {
-      throw new Error(
-        t('workflow file must end in .yml or .yaml.', 'workflow 文件名必须以 .yml 或 .yaml 结尾。'),
-      )
-    }
-    if (s.includes('/') || s.includes('\\')) {
-      throw new Error(t('must be a bare filename, not a path.', '必须是纯文件名,不能是路径。'))
-    }
-    return s
-  })
+  return promptValidated(
+    t('CI workflow filename', 'CI workflow 文件名'),
+    dflt,
+    validateWorkflowFile,
+  )
 }
 
 function requirePackageDir(dir: string): void {

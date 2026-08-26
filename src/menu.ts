@@ -6,8 +6,18 @@ import { PkgJson } from './pkgjson'
 import { errMsg } from './commands/util'
 import { runScan } from './commands/scan'
 import { runAudit } from './commands/audit'
+import { configureOne, requireId } from './batch'
 import { discoverLocal, validateOwnerRepo } from './discover'
+import { defaultProvisionArgs, runProvision } from './provision'
 import { githubTrust, Permission, sameBinding } from './registry/index'
+import {
+  checkboxPrompt,
+  confirm,
+  promptLine,
+  promptOtp,
+  promptValidated,
+  selectPrompt,
+} from './prompts'
 import {
   defaultWizardArgs,
   ensureWorkflowFile,
@@ -21,19 +31,11 @@ import {
   describeBinding,
   desiredBinding,
   resolveClient,
+  validateWorkflowFile,
   Writer,
 } from './engine'
-import {
-  checkboxPrompt,
-  confirm,
-  promptLine,
-  promptOtp,
-  promptOtpOptional,
-  promptValidated,
-  selectPrompt,
-} from './prompts'
 
-import type { DiscoveredPackage } from './discover'
+import type { BatchTarget, OtpBox } from './batch'
 import type { Client, GithubClaims, TrustConfig } from './registry/index'
 
 type Action =
@@ -41,25 +43,13 @@ type Action =
   | 'batch'
   | 'bind'
   | 'genci'
+  | 'provision'
   | 'publish'
   | 'quit'
   | 'revoke'
   | 'scan'
   | 'status'
   | 'wizard'
-
-/** One batch candidate: discovery result + registry state + derived target binding. */
-interface BatchTarget {
-  desired?: TrustConfig
-  pkg: DiscoveredPackage
-  published: boolean
-  repository?: string
-}
-
-/** Shared mutable OTP for a batch (re-entered once when the ~5-min window expires). */
-interface OtpBox {
-  otp: string
-}
 
 /** Cached view of the package's registry state (avoids re-fetching each loop). */
 interface Snapshot {
@@ -117,13 +107,6 @@ export async function runMenu(): Promise<void> {
   }
 }
 
-function bareYmlValidator(s: string): string {
-  const msg = t('must be a bare *.yml / *.yaml filename.', '必须是纯 *.yml / *.yaml 文件名。')
-  if (!(s.endsWith('.yml') || s.endsWith('.yaml'))) throw new Error(msg)
-  if (s.includes('/') || s.includes('\\')) throw new Error(msg)
-  return s
-}
-
 async function bind(client: Client, name: string | undefined, snap: Snapshot): Promise<void> {
   if (!name) return
   const writer = new Writer(client)
@@ -149,7 +132,7 @@ async function bind(client: Client, name: string | undefined, snap: Snapshot): P
   const workflow = await promptValidated(
     t('CI workflow filename', 'CI workflow 文件名'),
     defaultWf,
-    bareYmlValidator,
+    validateWorkflowFile,
   )
   try {
     ensureWorkflowFile('.', workflow)
@@ -224,7 +207,7 @@ async function configureFromDir(client: Client, dir: string): Promise<void> {
   for (const pkg of candidates) {
     const derived = desiredBinding(pkg)
     targets.push({
-      pkg,
+      name: pkg.name,
       published: await existsQuiet(client, pkg.name),
       desired: derived?.config,
       repository: derived?.repository,
@@ -264,7 +247,7 @@ async function configureFromDir(client: Client, dir: string): Promise<void> {
   let fail = 0
 
   for (const tgt of picked) {
-    console.log(`── ${tgt.pkg.name} ──`)
+    console.log(`── ${tgt.name} ──`)
     if (await configureOne(tgt, writer, box)) ok++
     else fail++
   }
@@ -277,51 +260,6 @@ async function configureFromDir(client: Client, dir: string): Promise<void> {
       ),
     ),
   )
-}
-
-/** Configure a single batch target: placeholder-publish if needed, then bind. */
-async function configureOne(tgt: BatchTarget, writer: Writer, box: OtpBox): Promise<boolean> {
-  if (!tgt.desired) {
-    process.stderr.write(
-      color.warn(
-        t(
-          '  skipped: package.json has no repository.',
-          '  跳过:package.json 没有 repository 字段。',
-        ),
-      ) + '\n',
-    )
-    return false
-  }
-  const name = tgt.pkg.name
-
-  if (!tgt.published && !(await publishWithRetry(name, writer, box))) return false
-
-  let current: TrustConfig | undefined
-  try {
-    const configs = await writer.list(name)
-    current = configs[0]
-  } catch (error) {
-    process.stderr.write(color.warn(`  list failed: ${errMsg(error)}`) + '\n')
-    return false
-  }
-  try {
-    let label: string
-    if (current && sameBinding(tgt.desired, current)) {
-      label = t('already bound', '已正确绑定')
-    } else if (current) {
-      await writer.revoke(name, requireId(current, name))
-      await writer.create(name, tgt.desired)
-      label = t('rebound', '已改绑')
-    } else {
-      await writer.create(name, tgt.desired)
-      label = t('bound', '已绑定')
-    }
-    console.log(color.ok(`  ✓ ${label}: ${describeBinding(tgt.desired)}`))
-    return true
-  } catch (error) {
-    process.stderr.write(color.warn(`  bind failed: ${errMsg(error)}`) + '\n')
-    return false
-  }
 }
 
 async function dispatch(
@@ -346,6 +284,10 @@ async function dispatch(
     }
     case 'genci': {
       await genCi()
+      break
+    }
+    case 'provision': {
+      await runProvision(defaultProvisionArgs(), client)
       break
     }
     case 'publish': {
@@ -389,7 +331,7 @@ async function genCi(): Promise<void> {
   const workflow = await promptValidated(
     t('CI workflow filename', 'CI workflow 文件名'),
     DEFAULT_WORKFLOW,
-    bareYmlValidator,
+    validateWorkflowFile,
   )
   ensureWorkflowFile('.', workflow)
 }
@@ -400,8 +342,8 @@ async function pickTargets(targets: BatchTarget[]): Promise<BatchTarget[]> {
     const pubS = tgt.published ? t('published', '已发布') : t('unpublished', '未发布')
     const skipS = t('(no repository / ignored — will skip)', '(无 repository 或已 ignore,将跳过)')
     const label = tgt.desired
-      ? `${tgt.pkg.name}  → ${tgt.repository} · ${pubS}`
-      : `${tgt.pkg.name}  · ${pubS} ${skipS}`
+      ? `${tgt.name}  → ${tgt.repository} · ${pubS}`
+      : `${tgt.name}  · ${pubS} ${skipS}`
     return { name: label, value: i, checked: true }
   })
   const picked = await checkboxPrompt<number>(
@@ -434,6 +376,13 @@ function promptAction(hasPkg: boolean): Promise<Action> {
   ]
   const items: Array<{ name: string; value: Action }> = [
     ...(hasPkg ? pkgItems : []),
+    {
+      name: t(
+        'Batch placeholder publish + binding (new names, no local package needed)',
+        '批量占位发布 + 绑定仓库(新包名,无需本地目录)',
+      ),
+      value: 'provision',
+    },
     { name: t('Batch setup (scan a dir, one OTP)', '批量配置(扫描目录,一次 OTP)'), value: 'batch' },
     { name: t('Scan (batch)', '扫描 scan(批量)'), value: 'scan' },
     { name: t('Audit (batch)', '审计 audit(批量)'), value: 'audit' },
@@ -458,39 +407,12 @@ async function publishAction(
   }
 }
 
-/**
- * First-publish a placeholder, re-prompting for a fresh OTP on failure (the
- * ~5-min window may have expired mid-batch). A blank OTP skips this package.
- */
-async function publishWithRetry(name: string, writer: Writer, box: OtpBox): Promise<boolean> {
-  for (;;) {
-    try {
-      publishPlaceholder(name, box.otp)
-      return true
-    } catch (error) {
-      process.stderr.write(color.warn(`  publish failed: ${errMsg(error)}`) + '\n')
-      const re = await promptOtpOptional(
-        t('  re-enter OTP to retry (blank to skip this package)', '  重输 OTP 重试(留空跳过该包)'),
-      )
-      if (re === undefined) return false
-      box.otp = re
-      writer.setOtp(re)
-    }
-  }
-}
-
 async function refresh(client: Client, name: string | undefined, snap: Snapshot): Promise<void> {
   if (!name) return
   snap.published = await existsQuiet(client, name)
   // Binding state may have changed; mark unknown until the next explicit fetch.
   snap.bindingKnown = false
   snap.binding = undefined
-}
-
-/** Fail fast rather than issue `DELETE …/trust/` with an empty id. */
-function requireId(config: TrustConfig, name: string): string {
-  if (!config.id) throw new Error(`registry returned a trust config without an id for ${name}`)
-  return config.id
 }
 
 async function revoke(client: Client, name: string | undefined, snap: Snapshot): Promise<void> {

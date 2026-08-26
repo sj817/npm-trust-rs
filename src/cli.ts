@@ -8,6 +8,7 @@ import { runMenu } from './menu'
 import { runWizard } from './wizard'
 import { runScan } from './commands/scan'
 import { runSync } from './commands/sync'
+import { runProvision } from './provision'
 import { runAudit } from './commands/audit'
 
 import type { OptionValues } from 'commander'
@@ -64,6 +65,29 @@ async function main(): Promise<number> {
     .action(async (opts: OptionValues) => {
       await runWizard({
         dir: opts.dir,
+        workflow: opts.workflow,
+        environment: opts.environment,
+        dryRun: opts.dryRun,
+      })
+    })
+
+  program
+    .command('provision')
+    .description(
+      t(
+        'Batch-reserve a primary package and/or its platform sub-packages, then bind them all to one repository. No local package or directory required.',
+        '批量占位发布主包 / 跨平台子包,并统一绑定到同一个仓库。无需本地包或目录。',
+      ),
+    )
+    .option('--workflow <file>', WORKFLOW_HELP())
+    .option('--environment <name>', ENV_HELP())
+    .option(
+      '--dry-run',
+      t('plan the names only; publish nothing', '只推演包名清单,不发布、不绑定'),
+      false,
+    )
+    .action(async (opts: OptionValues) => {
+      await runProvision({
         workflow: opts.workflow,
         environment: opts.environment,
         dryRun: opts.dryRun,

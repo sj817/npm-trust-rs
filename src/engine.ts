@@ -321,3 +321,17 @@ export function statusLabel(s: BindingStatus): string {
     }
   }
 }
+
+/** A workflow reference must be a bare `*.yml` / `*.yaml` filename, not a path. */
+export function validateWorkflowFile(input: string): string {
+  const s = input.trim()
+  if (!(s.endsWith('.yml') || s.endsWith('.yaml'))) {
+    throw new Error(
+      t('workflow file must end in .yml or .yaml.', 'workflow 文件名必须以 .yml 或 .yaml 结尾。'),
+    )
+  }
+  if (s.includes('/') || s.includes('\\')) {
+    throw new Error(t('must be a bare filename, not a path.', '必须是纯文件名,不能是路径。'))
+  }
+  return s
+}
