@@ -13,7 +13,7 @@ import { runAudit } from './commands/audit'
 
 import type { OptionValues } from 'commander'
 
-const VERSION = '0.1.0'
+const VERSION = '0.2.0'
 
 // Shared option help lines (functions so `t()` runs after language detection).
 const ORG_HELP = (): string =>
