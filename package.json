@@ -1,6 +1,6 @@
 {
   "name": "@qwqo/npm-trust",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "npm Trusted Publishing (OIDC) setup wizard + batch tools — native TypeScript, no npm version requirement",
   "keywords": [
     "npm",

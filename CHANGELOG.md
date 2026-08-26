@@ -6,11 +6,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.2.1]
+
+### Changed 变更
+
+- The short `<os>-<arch>` vocabulary now spells x86-64 as `x64` instead of `amd64` — `@scope/native-win-x64`, `@scope/native-mac-x64`. `amd64` stays in the Go vocabulary, where it is the convention. 简写词表的 x86-64 改用 `x64` 而非 `amd64`，如 `@scope/native-win-x64`、`@scope/native-mac-x64`；Go 词表仍用 `amd64`，那是它的惯例。
+
 ## [0.2.0]
 
 ### Added 新增
 
-- `npt provision` (also in the menu): batch-reserve a primary package and / or its per-platform sub-packages under names that do not exist yet, then bind them all to one repository with a single OTP. Nothing needs to exist locally — no package directory and no checkout; each placeholder is generated in a temp directory, published, and removed. Sub-package names are derived from the primary name (`@scope/native-<os>-<arch>` by default, or the primary name as prefix, or a hand-entered one) in a choice of `<os>-<arch>` vocabularies — Node (`win32-x64`), Go (`windows-amd64`), or short (`win-amd64`). `npt provision`（菜单中同样可选）：为尚不存在的包名批量占位发布主包和 / 或跨平台子包，并统一绑定到同一个仓库，整批一次 OTP。全程无需本地包目录或 clone，占位包在临时目录生成、发布完即删。子包名从主包名推导（默认 `@scope/native-<os>-<arch>`，也可沿用主包名做前缀或手动输入），`<os>-<arch>` 词表可选 Node（`win32-x64`）、Go（`windows-amd64`）或简写（`win-amd64`）。
+- `npt provision` (also in the menu): batch-reserve a primary package and / or its per-platform sub-packages under names that do not exist yet, then bind them all to one repository with a single OTP. Nothing needs to exist locally — no package directory and no checkout; each placeholder is generated in a temp directory, published, and removed. Sub-package names are derived from the primary name (`@scope/native-<os>-<arch>` by default, or the primary name as prefix, or a hand-entered one) in a choice of `<os>-<arch>` vocabularies — Node (`win32-x64`), Go (`windows-amd64`), or short (`win-x64`). `npt provision`（菜单中同样可选）：为尚不存在的包名批量占位发布主包和 / 或跨平台子包，并统一绑定到同一个仓库，整批一次 OTP。全程无需本地包目录或 clone，占位包在临时目录生成、发布完即删。子包名从主包名推导（默认 `@scope/native-<os>-<arch>`，也可沿用主包名做前缀或手动输入），`<os>-<arch>` 词表可选 Node（`win32-x64`）、Go（`windows-amd64`）或简写（`win-x64`）。
 
 ## [0.1.0]
 
