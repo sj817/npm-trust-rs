@@ -123,7 +123,7 @@ describe('runProvision (dry run)', () => {
     })
 
     const out = await capture()
-    expect(out).toContain('axios-mac-amd64')
+    expect(out).toContain('axios-mac-x64')
     expect(out).toContain('axios-mac-arm64')
   })
 

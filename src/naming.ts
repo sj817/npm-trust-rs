@@ -64,7 +64,7 @@ const OS_TOKENS: Record<PlatformNaming, Record<PlatformTarget['os'], string>> = 
 const ARCH_TOKENS: Record<PlatformNaming, Record<PlatformTarget['arch'], string>> = {
   go: { arm64: 'arm64', x64: 'amd64' },
   node: { arm64: 'arm64', x64: 'x64' },
-  short: { arm64: 'arm64', x64: 'amd64' },
+  short: { arm64: 'arm64', x64: 'x64' },
 }
 
 /** Segment charset npm accepts inside a (scoped) name. */

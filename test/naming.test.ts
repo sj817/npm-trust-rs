@@ -40,7 +40,7 @@ describe('platformSuffix', () => {
 
   it('marks musl builds in every vocabulary', () => {
     expect(platformSuffix(MUSL, 'node')).toBe('linux-x64-musl')
-    expect(platformSuffix(MUSL, 'short')).toBe('linux-amd64-musl')
+    expect(platformSuffix(MUSL, 'short')).toBe('linux-x64-musl')
   })
 })
 
