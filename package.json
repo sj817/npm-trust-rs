@@ -59,7 +59,7 @@
     "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@inquirer/prompts": "7.9.0",
+    "@inquirer/prompts": "8.7.0",
     "commander": "13.1.0",
     "picocolors": "1.1.1"
   },
