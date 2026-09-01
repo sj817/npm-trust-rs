@@ -36,23 +36,48 @@ type Action =
   | { dir?: string; kind: 'publish'; name: string; placeholder: boolean }
   | { kind: 'warnMissingWorkflow'; name: string; workflow: string }
 
-export async function runSync(args: SyncArgs): Promise<void> {
+/** Returns the process exit code: 1 when the current state could not be read. */
+export async function runSync(args: SyncArgs): Promise<number> {
   const dirs = args.dir.length > 0 ? args.dir : ['.']
   const packages = await discoverAll(dirs, args.org, args.limit)
   const byName = new Map(packages.map(p => [p.name, p]))
 
   const { client, valid } = await resolveClient(true)
-  const plans = await assess(client, valid, packages, args.workflow, args.environment)
+  // One writer for both halves: it reads the trust list (answering the OTP
+  // challenge the registry issues even for reads) and performs the writes, so a
+  // single OTP covers the whole run inside the registry's ~5-minute window.
+  const writer = new Writer(client)
+  const plans = await assess(client, valid, packages, args.workflow, args.environment, writer)
 
   const actions = plans.flatMap(p => planActions(p, byName.get(p.name), args))
+  const unknown = plans.filter(p => p.status === 'unknown')
   if (actions.length === 0) {
+    // "Nothing to do" is only true if we could actually see the current state.
+    // Saying it while some packages were unreadable reports success for work that
+    // was never even considered.
+    if (unknown.length > 0) {
+      console.log(
+        t(
+          `Cannot tell — the trust list for ${unknown.length} package(s) was unreadable, so nothing was planned:`,
+          `无法判断 —— 有 ${unknown.length} 个包的绑定读不出来,因此没有生成任何计划:`,
+        ),
+      )
+      for (const p of unknown) console.log(`  - ${p.name}`)
+      console.log(
+        t(
+          'Reading the trust API needs a 2FA/OTP. Re-run in a terminal, or set NPM_OTP.',
+          '读取 trust API 需要 2FA/OTP。请在终端里重新运行,或设置 NPM_OTP。',
+        ),
+      )
+      return 1
+    }
     console.log(
       t(
         'Nothing to do — all packages already in the desired state.',
         '无需操作 —— 所有包均已处于目标状态。',
       ),
     )
-    return
+    return 0
   }
 
   console.log('\n' + t('Planned actions:', '计划执行:'))
@@ -61,15 +86,16 @@ export async function runSync(args: SyncArgs): Promise<void> {
 
   if (args.dryRun) {
     console.log(t('(dry run — no changes made)', '(演练模式 —— 未做任何更改)'))
-    return
+    return 0
   }
   if (!(await confirm(t('Proceed with these actions?', '执行以上操作?'), args.yes))) {
     console.log(t('Aborted.', '已中止。'))
-    return
+    return 0
   }
 
-  await executeActions(actions, new Writer(client))
+  await executeActions(actions, writer)
   console.log('\n' + t('✓ sync complete.', '✓ 同步完成。'))
+  return 0
 }
 
 /** Fail fast rather than issue `DELETE …/trust/` with an empty id. */

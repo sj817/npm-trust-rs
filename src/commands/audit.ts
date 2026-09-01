@@ -64,6 +64,10 @@ function isDrift(p: PackagePlan): boolean {
   return (
     p.status === 'drift' ||
     p.status === 'missing' ||
+    // An unreadable trust list is not a clean audit. The registry requires an OTP
+    // to read it, so `unknown` is what a token-only CI run sees for every package;
+    // treating it as clean turns the check into an unconditional pass.
+    p.status === 'unknown' ||
     (p.status === 'unpublished' && p.desired !== undefined)
   )
 }

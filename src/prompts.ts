@@ -36,8 +36,22 @@ export async function promptLine(message: string, dflt?: string): Promise<string
   return answer.trim()
 }
 
+/**
+ * A one-time password supplied out of band via `NPM_OTP`.
+ *
+ * The registry demands an OTP for *reads* of the trust API as well as writes, so
+ * without this there is no way to run any trust operation where no TTY exists
+ * (CI, an agent shell, a piped invocation).
+ */
+export function envOtp(): string | undefined {
+  const v = process.env.NPM_OTP?.trim()
+  return v === undefined || v === '' ? undefined : v
+}
+
 /** Prompt for a one-time password (digits only, 6–8 long). */
 export async function promptOtp(): Promise<string> {
+  const fromEnv = envOtp()
+  if (fromEnv !== undefined) return fromEnv
   requireTty()
   const otp = await input({
     message: t(
@@ -51,6 +65,8 @@ export async function promptOtp(): Promise<string> {
 
 /** Like {@link promptOtp} but a blank line returns undefined (skip in batch flows). */
 export async function promptOtpOptional(message: string): Promise<string | undefined> {
+  const fromEnv = envOtp()
+  if (fromEnv !== undefined) return fromEnv
   requireTty()
   const val = await input({
     message,

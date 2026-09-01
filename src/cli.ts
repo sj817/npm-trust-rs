@@ -13,7 +13,7 @@ import { runAudit } from './commands/audit'
 
 import type { OptionValues } from 'commander'
 
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
 
 // Shared option help lines (functions so `t()` runs after language detection).
 const ORG_HELP = (): string =>
@@ -151,7 +151,7 @@ async function main(): Promise<number> {
       if (opts.placeholder && noPublish) {
         throw new Error('--placeholder cannot be combined with --no-publish')
       }
-      await runSync({
+      exitCode = await runSync({
         org: opts.org,
         dir: opts.dir,
         workflow: opts.workflow,

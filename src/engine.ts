@@ -3,8 +3,8 @@
 
 import { t } from './i18n'
 import * as color from './color'
-import { promptOtp } from './prompts'
-import { errMsg } from './commands/util'
+import { envOtp, promptOtp } from './prompts'
+import { errMsg, sleep } from './commands/util'
 import {
   Client,
   credentialSourceLabel,
@@ -26,7 +26,7 @@ import type {
   TrustConfig,
 } from './registry/index'
 
-const VERSION = '0.2.0'
+const VERSION = '0.3.0'
 
 /** Workflow filename convention; derives `github:<owner/repo>@<workflow>`. */
 export const DEFAULT_WORKFLOW = 'publish.yml'
@@ -34,6 +34,11 @@ export const DEFAULT_WORKFLOW = 'publish.yml'
 /** How a package's registry binding compares to what we want. */
 export type BindingStatus =
   'correct' | 'drift' | 'missing' | 'no_binding' | 'unknown' | 'unpublished' | 'untracked'
+
+/** Anything that can read a package's trust list, satisfying OTP challenges itself. */
+export interface TrustReader {
+  list: (pkg: string) => Promise<TrustConfig[]>
+}
 
 export interface PackagePlan {
   actual?: TrustConfig
@@ -46,6 +51,15 @@ export interface PackagePlan {
 }
 
 const MAX_OTP_TRIES = 3
+
+/**
+ * Gap between per-package trust reads.
+ *
+ * npm documents no numeric rate limit, but `npm trust` advises ~2s between
+ * commands (about 80 packages inside the 5-minute 2FA window). Reads count
+ * against the same budget as writes.
+ */
+const READ_SPACING_MS = 2000
 
 /**
  * OTP-aware writer. Caches the OTP across calls to exploit the ~5-minute window,
@@ -62,7 +76,8 @@ export class Writer {
 
   constructor(client: Client, otp?: string) {
     this.client = client
-    this.otp = otp
+    // NPM_OTP is the only way to satisfy a challenge where no TTY exists.
+    this.otp = otp ?? envOtp()
   }
 
   private async handleOtp(challenge: OtpChallenge): Promise<void> {
@@ -134,10 +149,17 @@ export async function assess(
   packages: DiscoveredPackage[],
   workflowOverride?: string,
   environment?: string,
+  reader?: TrustReader,
 ): Promise<PackagePlan[]> {
   const plans: PackagePlan[] = []
+  let readTrust = false
   for (const pkg of packages) {
     if (pkg.private) continue
+    // npm's own `npm trust` docs put the rate-limit budget at roughly one command
+    // every 2s. Writes were already spaced; reads were not, so scanning a handful
+    // of packages emptied the budget before a single write went out and the whole
+    // run 429'd. Space the reads on the same interval.
+    if (readTrust) await sleep(READ_SPACING_MS)
     let published: boolean
     try {
       published = await client.packageExists(pkg.name)
@@ -149,19 +171,37 @@ export async function assess(
     // When the trust list is unreadable (OTP challenge, expired token, network
     // error), the status must be `unknown` — reporting `missing` would make
     // audit flag false drift and sync plan a create that 409s.
+    //
+    // The registry demands an OTP to READ this list, not only to write it, so an
+    // unreadable list is the ordinary case rather than an edge one. Callers that can
+    // satisfy a challenge (sync, the menu) pass a `reader` — a Writer, which retries
+    // with an OTP. Everyone else reads with whatever NPM_OTP provides.
     let actual: TrustConfig | undefined
     let readable = haveCreds
     if (published && haveCreds) {
       try {
-        const configs = await client.listTrust(pkg.name)
+        readTrust = true
+        const configs = reader
+          ? await reader.list(pkg.name)
+          : await client.listTrust(pkg.name, envOtp())
         actual = configs[0]
       } catch (error) {
         readable = false
-        if (!(error instanceof OtpRequiredError) && !(error instanceof UnauthorizedError)) {
-          process.stderr.write(
-            color.warn(`⚠ could not read trust for ${pkg.name}: ${errMsg(error)}`) + '\n',
-          )
-        }
+        // An OTP challenge used to be swallowed here. It is the likeliest failure on
+        // this path, and saying nothing about it is what let `unknown` masquerade as
+        // "already correct" all the way out to audit's exit code.
+        const hint =
+          error instanceof OtpRequiredError || error instanceof UnauthorizedError
+            ? t(
+                ' — needs a 2FA/OTP (set NPM_OTP, or run sync in a terminal)',
+                ' —— 需要 2FA/OTP(设置 NPM_OTP,或在终端里运行 sync)',
+              )
+            : ''
+        const why = t(
+          `⚠ could not read trust for ${pkg.name}: ${errMsg(error)}${hint}`,
+          `⚠ 无法读取 ${pkg.name} 的绑定:${errMsg(error)}${hint}`,
+        )
+        process.stderr.write(color.warn(why) + '\n')
       }
     }
 
