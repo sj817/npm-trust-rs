@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.3.0]
+
+### Fixed 修复
+
+- An OTP challenge on a trust _read_ is no longer swallowed. The registry demands 2FA to read `GET /-/package/<pkg>/trust`, not only to write it, so `OtpRequiredError` and `UnauthorizedError` were the ordinary outcome of `assess()` — and both were caught silently, leaving every package `unknown` with nothing printed to say why. 读取绑定时的 OTP 挑战不再被静默吞掉。registry 读取 `GET /-/package/<pkg>/trust` 同样需要 2FA，并非只有写才需要，因此 `OtpRequiredError` 与 `UnauthorizedError` 本就是 `assess()` 的常态结果，而这两类错误此前一个字都不打印，导致所有包停在 `unknown` 却看不出原因。
+- `audit` counted `unknown` as clean and exited 0. Since reads are normally unreadable, that turned the drift check into an unconditional pass — it reported "all expected bindings match" for packages that had no binding at all. `audit` 此前把 `unknown` 当作一致并以 0 退出；由于读取本就通常失败，这让漂移检查变成无条件通过 —— 对根本没有任何绑定的包也会报告「所有期望的绑定均一致」。
+- `sync` planned no actions for `unknown` and then printed "all packages already in the desired state". It now names the unreadable packages and exits non-zero rather than claiming success for work it never considered. `sync` 对 `unknown` 不生成任何 action，却仍打印「所有包均已处于目标状态」；现在改为列出读不出来的包并以非零码退出，不再为从未考虑过的工作宣告成功。
+- Trust reads are spaced like writes. Only writes were throttled, so scanning a handful of packages spent the rate-limit budget on reads and the run 429'd before a single write went out. npm publishes no numeric limit, but `npm trust` advises roughly 2s between commands. 读取与写入一样加了间隔。此前只有写被限速，扫描少量包就会把限流配额耗在读上，导致第一个写请求发出前整轮就 429。npm 未公开具体限流数值，但 `npm trust` 文档建议命令之间间隔约 2 秒。
+
+### Added 新增
+
+- `NPM_OTP` supplies a one-time password without a terminal. `promptOtp()` requires a TTY, which made every trust operation impossible where there is none — CI, an agent shell, a piped invocation. `Writer` seeds from it too. `NPM_OTP` 环境变量可在无终端环境下提供一次性密码。`promptOtp()` 强制要求 TTY，导致 CI、agent shell、管道调用等场景根本无法执行任何 trust 操作。`Writer` 也会从中取值。
+- `assess()` accepts an optional `TrustReader`. `sync` passes its `Writer`, so a single OTP covers the reads and the writes that follow, inside the registry's ~5-minute window. `assess()` 新增可选的 `TrustReader` 参数；`sync` 传入自己的 `Writer`，使一次 OTP 同时覆盖读取与随后的写入，落在 registry 约 5 分钟的窗口内。
+
+### Changed 变更
+
+- `runSync` returns an exit code and the CLI propagates it. `runSync` 改为返回退出码，由 CLI 透传。
+- The hardcoded version constants in `cli.ts`, `engine.ts`, and `registry/client.ts` were still on `0.2.0` at the `0.2.1` release; all three now track the package version. `cli.ts`、`engine.ts`、`registry/client.ts` 中硬编码的版本常量在 0.2.1 发布时仍停留在 `0.2.0`，现已与包版本同步。
+
 ## [0.2.1]
 
 ### Changed 变更
