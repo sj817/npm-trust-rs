@@ -20,9 +20,30 @@ export interface BatchTarget {
   repository?: string
 }
 
+/** What {@link configureOne} did to one target, for the closing summary. */
+export interface Outcome {
+  /** Short column text: what happened, or why it did not. */
+  label: string
+  ok: boolean
+  /** A 0.0.1 placeholder went out in this run (even if the bind then failed). */
+  placeholder: boolean
+  /** Registry state after the run. */
+  published: boolean
+}
+
 /** Shared mutable OTP for a batch (re-entered once when the ~5-min window expires). */
 export interface OtpBox {
   otp: string
+}
+
+/** A finished target, ready for {@link printSummary}. */
+export interface SummaryRow {
+  /** Trailing `→ binding` (batch-from-dir, where each package has its own). */
+  binding?: string
+  /** Pre-padded kind column (provision: primary / platform). */
+  kind?: string
+  name: string
+  outcome: Outcome
 }
 
 /** Configure a single target: placeholder-publish if needed, then bind. */
@@ -30,7 +51,14 @@ export async function configureOne(
   tgt: BatchTarget,
   writer: Writer,
   box: OtpBox,
-): Promise<boolean> {
+): Promise<Outcome> {
+  const failed = (label: string, placeholder: boolean): Outcome => ({
+    ok: false,
+    placeholder,
+    published: tgt.published || placeholder,
+    label,
+  })
+
   if (!tgt.desired) {
     process.stderr.write(
       color.warn(
@@ -40,11 +68,14 @@ export async function configureOne(
         ),
       ) + '\n',
     )
-    return false
+    return failed(t('skipped: no repository', '跳过:无 repository'), false)
   }
   const name = tgt.name
 
-  if (!tgt.published && !(await publishWithRetry(name, writer, box))) return false
+  const placeholder = !tgt.published
+  if (placeholder && !(await publishWithRetry(name, writer, box))) {
+    return failed(t('publish failed', '发布失败'), false)
+  }
 
   let current: TrustConfig | undefined
   try {
@@ -52,7 +83,7 @@ export async function configureOne(
     current = configs[0]
   } catch (error) {
     process.stderr.write(color.warn(`  list failed: ${errMsg(error)}`) + '\n')
-    return false
+    return failed(unbound(t('list failed', '读取绑定失败'), placeholder), placeholder)
   }
   try {
     let label: string
@@ -67,11 +98,47 @@ export async function configureOne(
       label = t('bound', '已绑定')
     }
     console.log(color.ok(`  ✓ ${label}: ${describeBinding(tgt.desired)}`))
-    return true
+    return {
+      ok: true,
+      placeholder,
+      published: true,
+      label: placeholder ? t(`placeholder 0.0.1 + ${label}`, `首发占位 0.0.1 + ${label}`) : label,
+    }
   } catch (error) {
     process.stderr.write(color.warn(`  bind failed: ${errMsg(error)}`) + '\n')
-    return false
+    return failed(unbound(t('bind failed', '绑定失败'), placeholder), placeholder)
   }
+}
+
+/**
+ * Closing table — one line per target, then the tally. A placeholder that went
+ * out before its bind failed is called out: the name is reserved but unbound.
+ */
+export function printSummary(rows: SummaryRow[]): { fail: number; ok: number } {
+  const width = Math.max(...rows.map(row => row.name.length))
+  const publishedW = Math.max(publishedLabel(true).length, publishedLabel(false).length)
+  for (const row of rows) {
+    const cells = [
+      color.accent(row.name.padEnd(width)),
+      row.kind === undefined ? undefined : color.dim(row.kind),
+      publishedLabel(row.outcome.published).padEnd(publishedW),
+      row.outcome.ok ? row.outcome.label : color.warn(row.outcome.label),
+      row.binding !== undefined && row.outcome.ok ? color.dim(`→ ${row.binding}`) : undefined,
+    ]
+    console.log(`  ${cells.filter(cell => cell !== undefined).join('  ')}`)
+  }
+  const ok = rows.filter(row => row.outcome.ok).length
+  const fail = rows.length - ok
+  console.log()
+  console.log(
+    color.ok(
+      t(
+        `Done: ${ok} configured, ${fail} failed/skipped.`,
+        `完成:成功 ${ok} 个,失败/跳过 ${fail} 个。`,
+      ),
+    ),
+  )
+  return { ok, fail }
 }
 
 /**
@@ -103,4 +170,13 @@ export async function publishWithRetry(
 export function requireId(config: TrustConfig, name: string): string {
   if (!config.id) throw new Error(`registry returned a trust config without an id for ${name}`)
   return config.id
+}
+
+function publishedLabel(published: boolean): string {
+  return published ? t('published', '已发布') : t('unpublished', '未发布')
+}
+
+/** Prefix a failure label with the placeholder that did land, when one did. */
+function unbound(label: string, placeholder: boolean): string {
+  return placeholder ? t(`placeholder 0.0.1, ${label}`, `首发占位 0.0.1,${label}`) : label
 }

@@ -59,6 +59,25 @@ describe('protocol', () => {
     expect(await c.packageExists('missing-pkg')).toBe(false)
   })
 
+  it('latest_manifest reads GET /<esc>/latest and maps 404 → undefined', async () => {
+    ctx.mock.respondWith(req => {
+      expect(req.method).toBe('GET')
+      if (req.path === '/@acme%2fmissing/latest') return json(404, 'Not Found')
+      expect(req.path).toBe('/@acme%2fwidget/latest')
+      return json(200, {
+        name: '@acme/widget',
+        version: '1.2.3',
+        optionalDependencies: { '@acme/widget-linux-x64': '1.2.3' },
+        repository: { type: 'git', url: 'git+https://github.com/acme/widget.git' },
+      })
+    })
+    const c = client()
+    const manifest = await c.latestManifest('@acme/widget')
+    expect(manifest?.version).toBe('1.2.3')
+    expect(Object.keys(manifest?.optionalDependencies ?? {})).toEqual(['@acme/widget-linux-x64'])
+    expect(await c.latestManifest('@acme/missing')).toBeUndefined()
+  })
+
   it('list_trust escapes scoped name and normalizes a single object', async () => {
     ctx.mock.respondWith(req => {
       expect(req.path).toBe('/-/package/@acme%2fwidget/trust')

@@ -411,6 +411,8 @@ equivalent exponential-backoff retry on `429`/`5xx`/network errors.
 - [ ] Escape package name via `name.replace('/', '%2f')` (first slash only).
 - [ ] `GET /-/whoami` at startup to validate + display identity.
 - [ ] `GET /<name>` (public, unauth) for existence check — 404 = not published (see note below).
+- [ ] `GET /<esc>/latest` (public, unauth) for the latest manifest — `optionalDependencies` +
+      `repository` seed a batch rebind (see note below).
 - [ ] List: `GET /-/package/<esc>/trust`; normalize object-or-array.
 - [ ] Create: `POST /-/package/<esc>/trust` with a **one-element array** body + `permissions`.
 - [ ] Revoke: `DELETE /-/package/<esc>/trust/<urlencoded-id>`.
@@ -423,6 +425,14 @@ equivalent exponential-backoff retry on `429`/`5xx`/network errors.
 
 `GET https://registry.npmjs.org/<name>` — `404` = does not exist, `200` = exists. No auth
 required. (Not part of `npm trust`; documented in the project brief and used by `npt scan`.)
+
+### Latest manifest (public, unauthenticated)
+
+`GET https://registry.npmjs.org/<esc>/latest` — the version manifest the `latest` dist-tag
+points at (the same document `npm view <name>` shows); `404` = not published. `npt provision`
+reads two fields: `optionalDependencies`, which for a native addon is exactly its per-platform
+sub-package list, and `repository`, which seeds the binding target. Not part of `npm trust`;
+the `<esc>` form (`@s%2fp`) matches what `npm-registry-fetch` sends for packuments.
 
 ---
 

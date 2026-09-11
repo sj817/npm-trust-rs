@@ -8,6 +8,7 @@ import {
   DEFAULT_BASE_WORD,
   DEFAULT_TARGET_IDS,
   derivePrefix,
+  isPlatformSibling,
   MAX_NAME_LENGTH,
   platformPackageName,
   platformSuffix,
@@ -54,6 +55,22 @@ describe('derivePrefix', () => {
   it('reuses the primary name', () => {
     expect(derivePrefix('axios', 'suffix', DEFAULT_BASE_WORD)).toBe('axios')
     expect(derivePrefix('@shotkit/node', 'suffix', DEFAULT_BASE_WORD)).toBe('@shotkit/node')
+  })
+})
+
+describe('isPlatformSibling', () => {
+  it('claims the whole scope of a scoped primary', () => {
+    expect(isPlatformSibling('@shotkit/node', '@shotkit/linux-x64')).toBe(true)
+    expect(isPlatformSibling('@shotkit/shotium', '@shotkit/shotium-win32-x64')).toBe(true)
+    expect(isPlatformSibling('@shotkit/node', '@img/sharp-linux-x64')).toBe(false)
+    expect(isPlatformSibling('@shotkit/node', 'fsevents')).toBe(false)
+  })
+
+  it('claims <name>-… and @<name>/… for a bare primary', () => {
+    expect(isPlatformSibling('esbuild', '@esbuild/linux-x64')).toBe(true)
+    expect(isPlatformSibling('axios', 'axios-linux-x64')).toBe(true)
+    expect(isPlatformSibling('axios', 'axiosaurus')).toBe(false)
+    expect(isPlatformSibling('sharp', 'fsevents')).toBe(false)
   })
 })
 

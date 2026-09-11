@@ -12,8 +12,8 @@ import { repoExists } from './github'
 import { errMsg } from './commands/util'
 import { validateOwnerRepo } from './discover'
 import { githubPublishWorkflow } from './templates'
-import { confirm, promptOtpOptional, promptValidated } from './prompts'
 import { DEFAULT_REGISTRY, githubTrust, Permission } from './registry/index'
+import { confirm, confirmGuarded, promptOtpOptional, promptValidated } from './prompts'
 import {
   bindingRepo,
   DEFAULT_WORKFLOW,
@@ -235,7 +235,7 @@ export async function runWizard(args: WizardArgs): Promise<void> {
       ),
     )
     if (
-      !(await confirm(
+      !(await confirmGuarded(
         t('Publish a minimal placeholder version now?', '现在发布一个最小占位版本吗?'),
       ))
     ) {
@@ -261,8 +261,10 @@ export async function runWizard(args: WizardArgs): Promise<void> {
     console.log(color.ok(t(`✓ binding updated: ${desiredDesc}`, `✓ 绑定已更新:${desiredDesc}`)))
   } else {
     console.log(t(`desired binding: ${desiredDesc}`, `目标绑定:${desiredDesc}`))
-    if (!(await confirm(t('Create this trusted-publisher binding?', '创建这个可信任发布绑定?'))))
-      return
+    const create = await confirmGuarded(
+      t('Create this trusted-publisher binding?', '创建这个可信任发布绑定?'),
+    )
+    if (!create) return
     await writer.create(name, desired)
     console.log(color.ok(t(`✓ binding created: ${desiredDesc}`, `✓ 绑定已创建:${desiredDesc}`)))
   }

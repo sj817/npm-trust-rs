@@ -75,8 +75,8 @@ async function main(): Promise<number> {
     .command('provision')
     .description(
       t(
-        'Batch-reserve a primary package and/or its platform sub-packages, then bind them all to one repository. No local package or directory required.',
-        '批量占位发布主包 / 跨平台子包,并统一绑定到同一个仓库。无需本地包或目录。',
+        'Batch-reserve a primary package and/or its platform sub-packages, then bind them all to one repository. A published primary can supply the platform list from its optionalDependencies (batch rebind). No local package or directory required.',
+        '批量占位发布主包 / 跨平台子包,并统一绑定到同一个仓库。主包已发布时可从其 optionalDependencies 读取跨平台包列表(批量改绑)。无需本地包或目录。',
       ),
     )
     .option('--workflow <file>', WORKFLOW_HELP())

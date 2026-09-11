@@ -29,6 +29,31 @@ export function confirm(message: string, assumeYes = false): Promise<boolean> {
   return inqConfirm({ message, default: false })
 }
 
+/**
+ * {@link confirm} for the step that commits everything typed so far (a plan, a
+ * name list, an OTP already spent on reads). Enter still answers No — but No is
+ * then double-checked, and *that* question defaults to "go back", so a stray
+ * keypress re-asks instead of throwing the run away. Only a deliberate second
+ * answer cancels.
+ */
+export async function confirmGuarded(message: string, assumeYes = false): Promise<boolean> {
+  if (assumeYes) return true
+  for (;;) {
+    if (await confirm(message)) return true
+    const cancel = await selectPrompt<boolean>(
+      t(
+        'Cancel this run? Everything entered so far is discarded.',
+        '是否取消本次操作?已输入的内容会丢失。',
+      ),
+      [
+        { name: t('No — go back', '否 —— 返回上一步'), value: false },
+        { name: t('Yes — cancel', '是 —— 取消'), value: true },
+      ],
+    )
+    if (cancel) return false
+  }
+}
+
 /** Plain line input with an optional default; returns the trimmed answer. */
 export async function promptLine(message: string, dflt?: string): Promise<string> {
   requireTty()

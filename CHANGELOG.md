@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added 新增
+
+- `npt provision` reads a published primary's manifest from the registry (`GET /<name>/latest`) and offers its `optionalDependencies` as the platform list — siblings pre-ticked, unrelated optional deps left unticked — with `repository` seeding the target. Existing names are bound or rebound, so the same flow now batch-rebinds a whole native-addon matrix to a new repository under one OTP. The library client gains `Client.latestManifest()` and the `Manifest` type. `npt provision` 会从 registry 读取已发布主包的 manifest（`GET /<name>/latest`），把它的 `optionalDependencies` 作为跨平台包列表供勾选（同 scope 的子包默认勾上，无关的可选依赖默认不勾），`repository` 作为目标仓库默认值。已存在的包名只做绑定 / 改绑，因此同一流程现在可以一次 OTP 把整个原生插件矩阵批量改绑到新仓库。库入口新增 `Client.latestManifest()` 与 `Manifest` 类型。
+- Batch runs (`provision`, the menu's batch setup) end with a per-package summary table — kind, registry state, and what happened, including a placeholder that went out before its bind failed — followed by the tally. 批量运行（`provision`、菜单的批量配置）结束时输出逐包汇总表：类型、registry 状态、实际结果（包括占位版已发出但绑定失败的情况），最后是成功 / 失败计数。
+
+### Changed 变更
+
+- Confirmations that commit typed-in work (`Proceed?` in the batch flows, `Proceed with these actions?` in `sync`, create / replace binding in the menu and wizard, the wizard's placeholder publish) still default to No on Enter, but No now asks once more — "Cancel this run?" defaulting to _go back_ — so a stray keypress re-asks instead of discarding the plan, the name list, or an OTP already spent on reads. `--yes` bypasses both. 会丢弃已输入内容的确认（批量流程的「继续?」、`sync` 的「执行以上操作?」、菜单与向导里的创建 / 替换绑定、向导的占位发布）回车仍默认为否，但选否后会再问一次「是否取消本次操作?」且默认为「返回上一步」——误按一下不再直接丢掉计划、包名清单或已经花掉的 OTP。`--yes` 同时跳过两问。
+
 ## [0.3.0]
 
 ### Fixed 修复

@@ -6,11 +6,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runProvision } from '../src/provision'
 
 import type * as EngineModule from '../src/engine'
-import type { Client } from '../src/registry/index'
+import type { Client, Manifest } from '../src/registry/index'
 
 vi.mock('../src/prompts', () => ({
   checkboxPrompt: vi.fn(),
   confirm: vi.fn(),
+  confirmGuarded: vi.fn(),
   promptOtp: vi.fn(),
   promptValidated: vi.fn(),
   selectPrompt: vi.fn(),
@@ -24,10 +25,15 @@ vi.mock('../src/engine', async importOriginal => {
 const prompts = await import('../src/prompts')
 const engine = await import('../src/engine')
 
-/** Every name the registry reports as taken; everything else is free. */
-function scriptRegistry(published: string[]): void {
+/**
+ * Every name the registry reports as taken; everything else is free. A name with
+ * a manifest also answers `GET /<name>/latest` (and counts as published).
+ */
+function scriptRegistry(published: string[], manifests: Record<string, Manifest> = {}): void {
   const client = {
-    packageExists: (name: string) => Promise.resolve(published.includes(name)),
+    packageExists: (name: string) =>
+      Promise.resolve(published.includes(name) || Object.hasOwn(manifests, name)),
+    latestManifest: (name: string) => Promise.resolve(manifests[name]),
   } as unknown as Client
   vi.mocked(engine.resolveClient).mockResolvedValue({ client, valid: false })
 }
@@ -108,6 +114,7 @@ describe('runProvision (dry run)', () => {
     // 1 primary + 2 platforms, and no slot that was not selected
     expect(out).not.toContain('darwin')
     expect(prompts.confirm).not.toHaveBeenCalled()
+    expect(prompts.confirmGuarded).not.toHaveBeenCalled()
     expect(prompts.promptOtp).not.toHaveBeenCalled()
   })
 
@@ -125,6 +132,75 @@ describe('runProvision (dry run)', () => {
     const out = await capture()
     expect(out).toContain('axios-mac-x64')
     expect(out).toContain('axios-mac-arm64')
+  })
+
+  it("takes the platform list from a published primary's optionalDependencies", async () => {
+    scriptRegistry([], {
+      '@shotkit/shotium': {
+        name: '@shotkit/shotium',
+        version: '0.7.2',
+        optionalDependencies: {
+          '@shotkit/shotium-linux-x64': '0.7.2',
+          '@shotkit/shotium-win32-x64': '0.7.2',
+          fsevents: '^2.3.0',
+        },
+        repository: { type: 'git', url: 'git+https://github.com/sj817/shotium.git' },
+      },
+    })
+    scriptPrompts({
+      // kinds, then the optionalDependencies picked by name
+      checkboxes: [
+        ['primary', 'platform'],
+        ['@shotkit/shotium-linux-x64', '@shotkit/shotium-win32-x64'],
+      ],
+      // primary name, repository, workflow — no prefix / base word asked
+      lines: ['@shotkit/shotium', 'sj817/shotium', 'publish.yml'],
+      // platform source
+      selects: ['registry'],
+    })
+
+    const out = await capture()
+    expect(out).toContain('@shotkit/shotium-linux-x64')
+    expect(out).toContain('@shotkit/shotium-win32-x64')
+    expect(out).not.toContain('fsevents')
+    expect(out).toContain('github:sj817/shotium@publish.yml')
+    // the manifest's repository seeds the repo prompt
+    expect(prompts.promptValidated).toHaveBeenCalledWith(
+      expect.any(String),
+      'sj817/shotium',
+      expect.any(Function),
+    )
+    // siblings are pre-ticked, unrelated optional deps are not
+    const [, choices] = vi.mocked(prompts.checkboxPrompt).mock.calls[1] ?? []
+    expect(choices).toEqual([
+      { name: '@shotkit/shotium-linux-x64', value: '@shotkit/shotium-linux-x64', checked: true },
+      { name: '@shotkit/shotium-win32-x64', value: '@shotkit/shotium-win32-x64', checked: true },
+      { name: 'fsevents', value: 'fsevents', checked: false },
+    ])
+  })
+
+  it('falls back to the naming rules when the user declines the registry list', async () => {
+    scriptRegistry([], {
+      axios: {
+        name: 'axios',
+        version: '1.0.0',
+        optionalDependencies: { '@axios/linux-x64': '1.0.0' },
+      },
+    })
+    scriptPrompts({
+      checkboxes: [
+        ['primary', 'platform'],
+        [0, 1],
+      ],
+      lines: ['axios', 'sj817/axios', 'publish.yml'],
+      // platform source, then naming scheme + vocabulary as usual
+      selects: ['rules', 'suffix', 'node'],
+    })
+
+    const out = await capture()
+    expect(out).toContain('axios-linux-x64')
+    expect(out).toContain('axios-linux-arm64')
+    expect(out).not.toContain('@axios/linux-x64')
   })
 
   it('asks for a bare prefix when only platform packages are selected', async () => {

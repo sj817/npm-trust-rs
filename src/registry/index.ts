@@ -29,6 +29,7 @@ export type {
   FileRef,
   GithubClaims,
   GitlabClaims,
+  Manifest,
   ProviderKind,
   TrustConfig,
   Whoami,

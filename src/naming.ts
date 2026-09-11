@@ -87,6 +87,24 @@ export function derivePrefix(
   return `@${scope}/${baseWord}`
 }
 
+/**
+ * Whether an `optionalDependencies` entry of `primary` looks like one of its own
+ * platform sub-packages, so the registry-derived list can be pre-ticked without
+ * dragging in `fsevents` and friends. Scoped primaries claim their whole scope
+ * (`@shotkit/node` → `@shotkit/linux-x64`); bare ones claim `<name>-…` and the
+ * `@<name>/…` scope (`esbuild` → `@esbuild/linux-x64`).
+ */
+export function isPlatformSibling(primary: string, candidate: string): boolean {
+  const scopeOf = (name: string): string | undefined =>
+    name.startsWith('@') ? name.slice(1, name.indexOf('/')) : undefined
+  const primaryScope = scopeOf(primary)
+  const candidateScope = scopeOf(candidate)
+  if (candidateScope !== undefined) {
+    return candidateScope === (primaryScope ?? primary)
+  }
+  return primaryScope === undefined && candidate.startsWith(`${primary}-`)
+}
+
 /** `<prefix>-<os>-<arch>[-musl]`. */
 export function platformPackageName(
   prefix: string,

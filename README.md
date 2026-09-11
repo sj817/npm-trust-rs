@@ -42,7 +42,11 @@ The wizard derives the `github:<owner/repo>@<workflow>` binding from `package.js
 
 `npt provision` (also the menu's _batch placeholder publish_ entry) covers the other batch shape — names that do not exist yet. Nothing has to exist locally either: no package directory, no checkout, no `package.json`. Every placeholder is generated in a temp directory, published, and removed. Tick the primary package and/or the platform packages, give it the primary name (or, for platform-only runs, a bare prefix), then choose how sub-package names are derived (`@scope/native-<os>-<arch>` by default) and which `<os>-<arch>` vocabulary to use (`win32-x64` / `windows-amd64` / `win-x64`). It reserves every name with a 0.0.1 placeholder and binds them all to the same repository, one OTP for the run. `--dry-run` prints the name list and stops.
 
+The same command is the batch _rebind_ for an addon that already exists. Type the published primary name (`@shotkit/shotium`) and `npt` reads its latest manifest from the registry: `optionalDependencies` is offered as the platform list — siblings pre-ticked, `fsevents`-style extras left unticked — and `repository` seeds the target. Names that already exist are only bound or rebound (revoke + create), so pointing a whole matrix at a new repository is one run and one OTP. Every batch run ends with a per-package table: kind, registry state, and what happened.
+
 `npt provision`（也就是菜单里的「批量占位发布 + 绑定仓库」）处理另一种批量场景——包名还不存在。本地也不需要有任何东西：没有包目录、没有 clone、没有 `package.json` 都可以，每个占位包都在临时目录里生成，发布完即删。勾选主包和 / 或跨平台包，输入主包名（只发跨平台包时则输入一个前缀），再选择子包命名方式（默认 `@scope/native-<os>-<arch>`）和 `<os>-<arch>` 词表（`win32-x64` / `windows-amd64` / `win-x64`）。它会为每个名字发一个 0.0.1 占位版并统一绑定到同一个仓库，整批只需一次 OTP；`--dry-run` 只打印包名清单。
+
+同一条命令也是已有插件的批量 _改绑_。输入已发布的主包名（如 `@shotkit/shotium`），`npt` 会从 registry 读取它最新版本的 manifest：`optionalDependencies` 作为跨平台包列表供勾选（同 scope 的子包默认勾上，`fsevents` 之类的额外依赖默认不勾），`repository` 用作目标仓库的默认值。已存在的包名只做绑定或改绑（撤销 + 重建），整个矩阵指向新仓库只需一轮、一次 OTP。每次批量运行结束都会输出逐包表格：类型、registry 状态、以及实际做了什么。
 
 GitHub scanning (`--org`) and repo checks use the anonymous GitHub REST API. Set `GITHUB_TOKEN` (or `GH_TOKEN`) to raise the rate limit and see private repos.
 

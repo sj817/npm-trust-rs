@@ -55,6 +55,18 @@ export interface Whoami {
   username: string
 }
 
+/**
+ * The slice of a version manifest (`GET /<name>/<tag>`) npt reads: for a native
+ * addon, `optionalDependencies` names the per-platform sub-packages and
+ * `repository` says where the binding should point.
+ */
+export interface Manifest {
+  name: string
+  optionalDependencies?: Record<string, string>
+  repository?: unknown
+  version: string
+}
+
 /** Build a GitHub Actions trust config. `environment` is omitted when undefined. */
 export function githubTrust(
   repository: string,

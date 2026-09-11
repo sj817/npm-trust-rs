@@ -16,7 +16,7 @@ import {
   UnauthorizedError,
 } from './errors'
 
-import type { TrustConfig, Whoami } from './model'
+import type { Manifest, TrustConfig, Whoami } from './model'
 import type { NptError, OtpChallenge, WebOtp } from './errors'
 
 export const DEFAULT_REGISTRY = 'https://registry.npmjs.org/'
@@ -121,6 +121,21 @@ export class Client {
     // Body is a one-element array; `id` is omitted (never set on a desired config).
     const res = await this.send('POST', path, { otp, body: [config] })
     return normalizeConfigs(await this.json<unknown>(res))
+  }
+
+  /**
+   * `GET /<esc>/latest` — the manifest of the version the `latest` tag points at,
+   * or undefined when the name is not published. Public; no auth or OTP involved.
+   */
+  async latestManifest(name: string): Promise<Manifest | undefined> {
+    let res: Response
+    try {
+      res = await this.send('GET', `${Client.escapedName(name)}/latest`)
+    } catch (error) {
+      if (error instanceof NotFoundError) return undefined
+      throw error
+    }
+    return this.json<Manifest>(res)
   }
 
   async listTrust(name: string, otp?: string): Promise<TrustConfig[]> {

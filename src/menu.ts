@@ -6,18 +6,10 @@ import { PkgJson } from './pkgjson'
 import { errMsg } from './commands/util'
 import { runScan } from './commands/scan'
 import { runAudit } from './commands/audit'
-import { configureOne, requireId } from './batch'
 import { discoverLocal, validateOwnerRepo } from './discover'
+import { configureOne, printSummary, requireId } from './batch'
 import { defaultProvisionArgs, runProvision } from './provision'
 import { githubTrust, Permission, sameBinding } from './registry/index'
-import {
-  checkboxPrompt,
-  confirm,
-  promptLine,
-  promptOtp,
-  promptValidated,
-  selectPrompt,
-} from './prompts'
 import {
   defaultWizardArgs,
   ensureWorkflowFile,
@@ -25,6 +17,15 @@ import {
   publishPlaceholder,
   runWizard,
 } from './wizard'
+import {
+  checkboxPrompt,
+  confirm,
+  confirmGuarded,
+  promptLine,
+  promptOtp,
+  promptValidated,
+  selectPrompt,
+} from './prompts'
 import {
   bindingRepo,
   DEFAULT_WORKFLOW,
@@ -35,7 +36,7 @@ import {
   Writer,
 } from './engine'
 
-import type { BatchTarget, OtpBox } from './batch'
+import type { BatchTarget, OtpBox, SummaryRow } from './batch'
 import type { Client, GithubClaims, TrustConfig } from './registry/index'
 
 type Action =
@@ -157,11 +158,13 @@ async function bind(client: Client, name: string | undefined, snap: Snapshot): P
         `当前:${describeBinding(current)}\n目标:${describeBinding(desired)}`,
       ),
     )
-    if (!(await confirm(t('Replace it (revoke + create)?', '替换它(撤销 + 重建)?')))) return
+    if (!(await confirmGuarded(t('Replace it (revoke + create)?', '替换它(撤销 + 重建)?')))) {
+      return
+    }
     await writer.revoke(name, requireId(current, name))
   } else {
     console.log(t(`desired: ${describeBinding(desired)}`, `目标:${describeBinding(desired)}`))
-    if (!(await confirm(t('Create this binding?', '创建这个绑定?')))) return
+    if (!(await confirmGuarded(t('Create this binding?', '创建这个绑定?')))) return
   }
   await writer.create(name, desired)
   const desc = describeBinding(desired)
@@ -239,27 +242,27 @@ async function configureFromDir(client: Client, dir: string): Promise<void> {
       `将配置 ${bindable} 个包:未发布则首发占位,然后绑定。`,
     ),
   )
-  if (!(await confirm(t("Proceed? You'll enter your OTP once.", '继续?只需输入一次 OTP。')))) return
+  const proceed = await confirmGuarded(
+    t("Proceed? You'll enter your OTP once.", '继续?只需输入一次 OTP。'),
+  )
+  if (!proceed) return
 
   const box: OtpBox = { otp: await promptOtp() }
   const writer = Writer.withOtp(client, box.otp)
-  let ok = 0
-  let fail = 0
+  const rows: SummaryRow[] = []
 
   for (const tgt of picked) {
     console.log(`── ${tgt.name} ──`)
-    if (await configureOne(tgt, writer, box)) ok++
-    else fail++
+    const outcome = await configureOne(tgt, writer, box)
+    rows.push({
+      name: tgt.name,
+      outcome,
+      binding: tgt.desired ? describeBinding(tgt.desired) : undefined,
+    })
   }
 
-  console.log(
-    color.ok(
-      t(
-        `Done: ${ok} configured, ${fail} failed/skipped.`,
-        `完成:成功 ${ok} 个,失败/跳过 ${fail} 个。`,
-      ),
-    ),
-  )
+  console.log()
+  printSummary(rows)
 }
 
 async function dispatch(
@@ -378,8 +381,8 @@ function promptAction(hasPkg: boolean): Promise<Action> {
     ...(hasPkg ? pkgItems : []),
     {
       name: t(
-        'Batch placeholder publish + binding (new names, no local package needed)',
-        '批量占位发布 + 绑定仓库(新包名,无需本地目录)',
+        'Batch by package name: placeholder publish + bind / rebind (no local package needed)',
+        '按包名批量:占位发布 + 绑定 / 改绑仓库(无需本地目录)',
       ),
       value: 'provision',
     },

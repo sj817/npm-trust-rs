@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 
 import { t } from '../i18n'
-import { confirm } from '../prompts'
+import { confirmGuarded } from '../prompts'
 import { discoverAll, sleep } from './util'
 import { DEFAULT_REGISTRY } from '../registry/index'
 import { promptPublishOtp, publishPlaceholder } from '../wizard'
@@ -88,7 +88,9 @@ export async function runSync(args: SyncArgs): Promise<number> {
     console.log(t('(dry run — no changes made)', '(演练模式 —— 未做任何更改)'))
     return 0
   }
-  if (!(await confirm(t('Proceed with these actions?', '执行以上操作?'), args.yes))) {
+  // Reaching this point may already have cost an OTP (trust reads); a stray
+  // Enter must not throw that away.
+  if (!(await confirmGuarded(t('Proceed with these actions?', '执行以上操作?'), args.yes))) {
     console.log(t('Aborted.', '已中止。'))
     return 0
   }
