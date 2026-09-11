@@ -53,7 +53,7 @@ export async function repoExists(ownerRepo: string): Promise<boolean> {
 }
 
 function headers(accept = 'application/vnd.github+json'): Record<string, string> {
-  const h: Record<string, string> = { 'user-agent': 'npt/0.2.0', accept }
+  const h: Record<string, string> = { 'user-agent': 'npt/0.4.0', accept }
   const token = process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN
   if (token) h['authorization'] = `Bearer ${token}`
   return h

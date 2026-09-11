@@ -21,7 +21,7 @@ import type { NptError, OtpChallenge, WebOtp } from './errors'
 
 export const DEFAULT_REGISTRY = 'https://registry.npmjs.org/'
 
-const CLIENT_VERSION = '0.3.0'
+const CLIENT_VERSION = '0.4.0'
 const TIMEOUT_MS = 30_000
 
 export interface ClientOptions {

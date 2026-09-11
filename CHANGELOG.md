@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.4.0]
+
 ### Added 新增
 
 - `npt provision` reads a published primary's manifest from the registry (`GET /<name>/latest`) and offers its `optionalDependencies` as the platform list — siblings pre-ticked, unrelated optional deps left unticked — with `repository` seeding the target. Existing names are bound or rebound, so the same flow now batch-rebinds a whole native-addon matrix to a new repository under one OTP. The library client gains `Client.latestManifest()` and the `Manifest` type. `npt provision` 会从 registry 读取已发布主包的 manifest（`GET /<name>/latest`），把它的 `optionalDependencies` 作为跨平台包列表供勾选（同 scope 的子包默认勾上，无关的可选依赖默认不勾），`repository` 作为目标仓库默认值。已存在的包名只做绑定 / 改绑，因此同一流程现在可以一次 OTP 把整个原生插件矩阵批量改绑到新仓库。库入口新增 `Client.latestManifest()` 与 `Manifest` 类型。

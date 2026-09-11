@@ -26,7 +26,7 @@ import type {
   TrustConfig,
 } from './registry/index'
 
-const VERSION = '0.3.0'
+const VERSION = '0.4.0'
 
 /** Workflow filename convention; derives `github:<owner/repo>@<workflow>`. */
 export const DEFAULT_WORKFLOW = 'publish.yml'
