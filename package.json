@@ -64,13 +64,13 @@
     "picocolors": "1.1.1"
   },
   "devDependencies": {
-    "@qwqo/eslint-config": "0.2.2",
+    "@qwqo/eslint-config": "0.3.1",
     "@qwqo/prettier-config": "0.2.2",
-    "@types/node": "26.1.1",
-    "eslint": "10.8.0",
+    "@types/node": "26.4.1",
+    "eslint": "10.9.1",
     "eslint-import-resolver-typescript": "4.4.5",
     "prettier": "3.9.6",
-    "tsdown": "0.22.14",
+    "tsdown": "0.23.0",
     "typescript": "6.0.3",
     "vitest": "4.1.10"
   }
